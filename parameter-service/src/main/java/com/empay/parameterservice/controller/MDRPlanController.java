@@ -1,7 +1,10 @@
 
 package com.empay.parameterservice.controller;
 
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -47,30 +50,30 @@ public class MDRPlanController {
 	}
 
 	@PreAuthorize("hasAuthority('PARAMS.PARAM_MDR_PLAN.CREATE')")
-	@PostMapping(value = "/save-mdrplan")
-	public ResponseEntity<String> saveMDRPlan(@RequestBody @Valid MDRPlanVO mdrPlanVo, HttpServletRequest request) {
+	@PostMapping(value = "/save-mdrplan", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<Map<String, Object>> saveMDRPlan(@RequestBody @Valid MDRPlanVO mdrPlanVo, HttpServletRequest request) {
 
 		String message = mdrPlanService.createMDRPlan(mdrPlanVo, request);
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(message);
+		return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", message, "status", "SUCCESS"));
 	}
 
 	@PreAuthorize("hasAuthority('PARAMS.PARAM_MDR_PLAN.EDIT')")
-	@PutMapping(value = "/update-mdrplan/{id}")
-	public ResponseEntity<String> updateMDRPlan(@PathVariable Integer id, @RequestBody @Valid MDRPlanVO mdrPlanVo,
+	@PutMapping(value = "/update-mdrplan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<Map<String, Object>> updateMDRPlan(@PathVariable Integer id, @RequestBody @Valid MDRPlanVO mdrPlanVo,
 			HttpServletRequest request) {
 
 		String message = mdrPlanService.updateMDRPlan(mdrPlanVo, id, request);
 
-		return ResponseEntity.ok(message);
+		return ResponseEntity.ok(Map.of("message", message, "status", "SUCCESS"));
 	}
 
 	@PreAuthorize("hasAuthority('PARAMS.PARAM_MDR_PLAN.DELETE')")
-	@DeleteMapping(value = "/delete-mdrplan/{id}")
-	public ResponseEntity<String> deleteMDRPlan(@PathVariable Integer id) {
+	@DeleteMapping(value = "/delete-mdrplan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<Map<String, Object>> deleteMDRPlan(@PathVariable Integer id) {
 
 		String message = mdrPlanService.deleteMDRPlan(id);
 
-		return ResponseEntity.ok(message);
+		return ResponseEntity.ok(Map.of("message", message, "status", "SUCCESS"));
 	}
 }

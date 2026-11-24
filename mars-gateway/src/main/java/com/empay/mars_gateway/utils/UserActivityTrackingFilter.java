@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -22,11 +23,9 @@ import org.springframework.web.server.ServerWebExchange;
 
 import com.empay.mars_gateway.valueobjects.UserActivityTrackingVO;
 
-import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
 
 @Component
-@RequiredArgsConstructor
 public class UserActivityTrackingFilter implements GlobalFilter, Ordered {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(UserActivityTrackingFilter.class);
@@ -39,9 +38,19 @@ public class UserActivityTrackingFilter implements GlobalFilter, Ordered {
 	public static final String X_REAL_IP = "X-Real-IP";
 
 	private final WebClient webClient;
+	private final String activityUrl;
 
-	@Value("${user.activity.url}")
-	private String activityUrl;
+	@Autowired
+	public UserActivityTrackingFilter(
+			WebClient webClient,
+			@Value("${user.activity.url}") String activityUrl) {
+		this.webClient = webClient;
+		this.activityUrl = activityUrl;
+	}
+
+	public UserActivityTrackingFilter(WebClient webClient) {
+		this(webClient, null);
+	}
 
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -74,6 +83,11 @@ public class UserActivityTrackingFilter implements GlobalFilter, Ordered {
 
 	private void trackActivity(ServerWebExchange exchange, String clientIp) {
 		try {
+			if (activityUrl == null || activityUrl.isBlank()) {
+				LOGGER.debug("User activity tracking URL is not configured; skipping tracking.");
+				return;
+			}
+
 			ServerHttpRequest request = exchange.getRequest();
 			String token = resolveToken(request);
 
@@ -162,41 +176,27 @@ public class UserActivityTrackingFilter implements GlobalFilter, Ordered {
 	}
 
 	String resolveResourceType(String permissionCode) {
-		if (permissionCode != null && !permissionCode.isBlank()) {
-			String[] parts = permissionCode.split("\\.");
-			if (parts.length >= 2) {
-				return parts[1];
-			}
+		if (permissionCode == null) {
+			return "ENDPOINT";
+		}
+		String paramResource = ParameterPermissionUtils.resolveResourceType(permissionCode);
+		if (paramResource != null) {
+			return paramResource;
+		}
+		String userManagementResource = UserManagementPermissionUtils.resolveResourceType(permissionCode);
+		if (userManagementResource != null) {
+			return userManagementResource;
 		}
 		return "ENDPOINT";
 	}
 
 	private String resolveResourceId(ServerHttpRequest request, String resourceType) {
-		MultiValueMap<String, String> queryParams = request.getQueryParams();
-
-		if ("USER".equalsIgnoreCase(resourceType) || "UM_USERS".equalsIgnoreCase(resourceType)) {
-			for (String param : new String[]{"userId", "user_id", "username", "targetUserId", "user", "id"}) {
-				String val = queryParams.getFirst(param);
-				if (val != null && !val.isBlank()) {
-					return truncate(val.trim(), 100);
-				}
-			}
-		} else if ("ROLE".equalsIgnoreCase(resourceType) || "UM_ROLES".equalsIgnoreCase(resourceType)) {
-			for (String param : new String[]{"roleId", "role_id", "role", "profileId", "profile_id", "profileName", "id", "code"}) {
-				String val = queryParams.getFirst(param);
-				if (val != null && !val.isBlank()) {
-					return truncate(val.trim(), 100);
-				}
-			}
-		} else if ("POLICY".equalsIgnoreCase(resourceType) || "UM_PASSWORD_POLICY".equalsIgnoreCase(resourceType)) {
-			for (String param : new String[]{"policyId", "policyCode", "policy_code", "policy", "code", "id"}) {
-				String val = queryParams.getFirst(param);
-				if (val != null && !val.isBlank()) {
-					return truncate(val.trim(), 100);
-				}
-			}
+		String idHeader = request.getHeaders().getFirst("X-Resource-Id");
+		if (idHeader != null && !idHeader.isBlank()) {
+			return truncate(idHeader.trim(), 100);
 		}
 
+		MultiValueMap<String, String> queryParams = request.getQueryParams();
 		for (String param : new String[]{"id", "resourceId", "code", "name"}) {
 			String val = queryParams.getFirst(param);
 			if (val != null && !val.isBlank()) {
@@ -248,7 +248,7 @@ public class UserActivityTrackingFilter implements GlobalFilter, Ordered {
 		}
 		StringBuilder sb = new StringBuilder();
 		queryParams.forEach((key, values) -> {
-			if (sb.length() > 0) sb.append("&");
+			if (!sb.isEmpty()) sb.append("&");
 			sb.append(key).append("=");
 			if (SENSITIVE_KEY_PATTERN.matcher(key).matches()) {
 				sb.append("[REDACTED]");
