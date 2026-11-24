@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserAuthMethodDto.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.dto</a> &gt; <span class="el_source">UserAuthMethodDto.java</span></div><h1>UserAuthMethodDto.java</h1><pre class="source lang-java linenums">package com.empay.user_management.dto;
+
+import java.time.LocalDateTime;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserAuthMethodDto {
+	private String provider;
+	private String providerName;
+	private String providerType; // PASSWORD, OAUTH2, OIDC
+
+	@JsonProperty(&quot;isLinked&quot;)
+	@JsonAlias({&quot;linked&quot;, &quot;is_linked&quot;})
+	private boolean isLinked;
+
+	public boolean isLinked() {
+<span class="fc" id="L26">		return isLinked;</span>
+	}
+
+	@JsonProperty(&quot;linked&quot;)
+	public boolean getLinked() {
+<span class="fc" id="L31">		return isLinked();</span>
+	}
+
+	@JsonProperty(&quot;isEnabled&quot;)
+	@JsonAlias({&quot;enabled&quot;, &quot;is_enabled&quot;})
+	private boolean isEnabled;
+
+	public boolean isEnabled() {
+<span class="fc" id="L39">		return isEnabled;</span>
+	}
+
+	@JsonProperty(&quot;enabled&quot;)
+	public boolean getEnabled() {
+<span class="fc" id="L44">		return isEnabled();</span>
+	}
+
+	@JsonProperty(&quot;isPrimary&quot;)
+	@JsonAlias({&quot;primary&quot;, &quot;is_primary&quot;})
+	private boolean isPrimary;
+
+	public boolean isPrimary() {
+<span class="fc" id="L52">		return isPrimary;</span>
+	}
+
+	@JsonProperty(&quot;primary&quot;)
+	public boolean getPrimary() {
+<span class="fc" id="L57">		return isPrimary();</span>
+	}
+
+	private String externalSubject;
+	private String externalUsername;
+	private String externalEmail;
+	private LocalDateTime linkedAt;
+	private LocalDateTime lastLoginAt;
+	private String icon;
+
+	public static class UserAuthMethodDtoBuilder {
+		public UserAuthMethodDtoBuilder linkedAt(LocalDateTime linkedAt) {
+<span class="fc" id="L69">			this.linkedAt = linkedAt;</span>
+<span class="fc" id="L70">			return this;</span>
+		}
+
+		public UserAuthMethodDtoBuilder linkedAt(String value) {
+<span class="pc bpc" id="L74" title="1 of 4 branches missed.">			if (value != null &amp;&amp; !value.isBlank()) {</span>
+				try {
+<span class="fc" id="L76">					this.linkedAt = LocalDateTime.parse(value);</span>
+<span class="fc" id="L77">				} catch (Exception ignored) {</span>
+					// Ignore invalid format
+<span class="fc" id="L79">				}</span>
+			}
+<span class="fc" id="L81">			return this;</span>
+		}
+
+		public UserAuthMethodDtoBuilder lastLoginAt(LocalDateTime lastLoginAt) {
+<span class="fc" id="L85">			this.lastLoginAt = lastLoginAt;</span>
+<span class="fc" id="L86">			return this;</span>
+		}
+
+		public UserAuthMethodDtoBuilder lastLoginAt(String value) {
+<span class="pc bpc" id="L90" title="1 of 4 branches missed.">			if (value != null &amp;&amp; !value.isBlank()) {</span>
+				try {
+<span class="fc" id="L92">					this.lastLoginAt = LocalDateTime.parse(value);</span>
+<span class="fc" id="L93">				} catch (Exception ignored) {</span>
+					// Ignore invalid format
+<span class="fc" id="L95">				}</span>
+			}
+<span class="fc" id="L97">			return this;</span>
+		}
+	}
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

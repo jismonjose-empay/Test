@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserPermissionOverrideHistoryServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">UserPermissionOverrideHistoryServiceImpl.java</span></div><h1>UserPermissionOverrideHistoryServiceImpl.java</h1><pre class="source lang-java linenums">
+package com.empay.user_management.serviceimpl;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.empay.user_management.dto.UserPermissionOverrideHistoryFilter;
+import com.empay.user_management.dto.UserPermissionOverrideHistoryPageResponse;
+import com.empay.user_management.entities.UserPermissionOverrideHistoryEntity;
+import com.empay.user_management.repository.UserPermissionOverrideHistoryRepository;
+import com.empay.user_management.service.UserPermissionOverrideHistoryService;
+
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class UserPermissionOverrideHistoryServiceImpl implements UserPermissionOverrideHistoryService {
+
+	private static final String ACTION_TAKEN = &quot;actionTaken&quot;;
+
+	private final UserPermissionOverrideHistoryRepository historyRepository;
+
+	@Override
+	public UserPermissionOverrideHistoryPageResponse getAllHistory(UserPermissionOverrideHistoryFilter filter) {
+
+<span class="fc" id="L37">		int pageNumber = Math.max(filter.page() - 1, 0);</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">		int size = filter.pageSize() &lt;= 0 ? 20 : Math.min(filter.pageSize(), 100);</span>
+
+<span class="fc" id="L40">		List&lt;String&gt; allowedSortFields = List.of(&quot;historyId&quot;, &quot;overrideId&quot;, &quot;userSerialNo&quot;, &quot;permissionCode&quot;, &quot;effect&quot;,</span>
+				ACTION_TAKEN, &quot;changedBy&quot;, &quot;changedAt&quot;, &quot;expiresAt&quot;);
+
+<span class="pc bpc" id="L43" title="1 of 4 branches missed.">		String sortField = (filter.sortBy() != null &amp;&amp; allowedSortFields.contains(filter.sortBy())) ? filter.sortBy() : &quot;changedAt&quot;;</span>
+
+<span class="fc bfc" id="L45" title="All 2 branches covered.">		Sort.Direction direction = &quot;ASC&quot;.equalsIgnoreCase(filter.sortDir()) ? Sort.Direction.ASC : Sort.Direction.DESC;</span>
+
+<span class="fc" id="L47">		Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(direction, sortField));</span>
+
+<span class="fc" id="L49">		Specification&lt;UserPermissionOverrideHistoryEntity&gt; specification = (root, query, cb) -&gt; {</span>
+
+<span class="fc" id="L51">			List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();</span>
+
+<span class="pc bpc" id="L53" title="2 of 4 branches missed.">			if (filter.search() != null &amp;&amp; !filter.search().isBlank()) {</span>
+<span class="fc" id="L54">				String pattern = &quot;%&quot; + filter.search().trim().toLowerCase(Locale.ROOT) + &quot;%&quot;;</span>
+
+<span class="fc" id="L56">				predicates.add(cb.or(cb.like(cb.lower(root.get(&quot;permissionCode&quot;)), pattern),</span>
+<span class="fc" id="L57">						cb.like(cb.lower(root.get(&quot;effect&quot;)), pattern),</span>
+<span class="fc" id="L58">						cb.like(cb.lower(root.get(&quot;justification&quot;)), pattern),</span>
+<span class="fc" id="L59">						cb.like(cb.lower(root.get(&quot;changedBy&quot;)), pattern),</span>
+<span class="fc" id="L60">						cb.like(cb.lower(root.get(ACTION_TAKEN)), pattern)));</span>
+			}
+
+<span class="pc bpc" id="L63" title="2 of 4 branches missed.">			if (filter.actionTaken() != null &amp;&amp; !filter.actionTaken().isBlank()) {</span>
+<span class="fc" id="L64">				predicates</span>
+<span class="fc" id="L65">						.add(cb.equal(cb.upper(root.get(ACTION_TAKEN)), filter.actionTaken().trim().toUpperCase(Locale.ROOT)));</span>
+			}
+
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">			if (filter.userSerialNo() != null) {</span>
+<span class="fc" id="L69">				predicates.add(cb.equal(root.get(&quot;userSerialNo&quot;), filter.userSerialNo()));</span>
+			}
+
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">			if (filter.overrideId() != null) {</span>
+<span class="fc" id="L73">				predicates.add(cb.equal(root.get(&quot;overrideId&quot;), filter.overrideId()));</span>
+			}
+
+<span class="fc" id="L76">			return cb.and(predicates.toArray(new Predicate[0]));</span>
+		};
+
+<span class="fc" id="L79">		Page&lt;UserPermissionOverrideHistoryEntity&gt; resultPage = historyRepository.findAll(specification, pageable);</span>
+
+<span class="fc" id="L81">		return new UserPermissionOverrideHistoryPageResponse(resultPage.getContent(), resultPage.getTotalElements(),</span>
+<span class="fc" id="L82">				pageNumber + 1, size, resultPage.getTotalPages(), resultPage.hasNext());</span>
+	}
+
+	@Override
+	public List&lt;UserPermissionOverrideHistoryEntity&gt; getHistoryByOverrideId(Long overrideId) {
+
+<span class="fc" id="L88">		return historyRepository.findAllByOverrideIdOrderByChangedAtDesc(overrideId);</span>
+	}
+
+	@Override
+	public List&lt;UserPermissionOverrideHistoryEntity&gt; getHistoryByUserSerialNo(Long userSerialNo) {
+
+<span class="fc" id="L94">		return historyRepository.findAllByUserSerialNoOrderByChangedAtDesc(userSerialNo);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

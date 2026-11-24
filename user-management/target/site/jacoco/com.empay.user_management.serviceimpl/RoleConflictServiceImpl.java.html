@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RoleConflictServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">RoleConflictServiceImpl.java</span></div><h1>RoleConflictServiceImpl.java</h1><pre class="source lang-java linenums">package com.empay.user_management.serviceimpl;
+
+import java.util.List;
+import java.util.Locale;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.empay.user_management.dto.CreateRoleConflictRequest;
+import com.empay.user_management.dto.RoleConflictResponse;
+import com.empay.user_management.entities.RoleConflictEntity;
+import com.empay.user_management.repository.AppRoleRepository;
+import com.empay.user_management.repository.RoleConflictRepository;
+import com.empay.user_management.repository.UserRoleRepositoryV2;
+import com.empay.user_management.service.RoleConflictService;
+
+/**
+ * Implementation of the role conflict rule service. Manages segregation of
+ * duties rules between application roles.
+ */
+@Service
+@Transactional
+public class RoleConflictServiceImpl implements RoleConflictService {
+
+	private static final String SEVERITY_BLOCK = &quot;BLOCK&quot;;
+	private static final String SEVERITY_WARN = &quot;WARN&quot;;
+
+	private final RoleConflictRepository roleConflictRepository;
+	private final AppRoleRepository appRoleRepository;
+	private final UserRoleRepositoryV2 userRoleRepository;
+
+	/**
+	 * Creates a new role conflict service implementation with required
+	 * dependencies.
+	 *
+	 * @param roleConflictRepository repository for role conflict entities
+	 * @param appRoleRepository      repository for application roles
+	 * @param userRoleRepository     repository for user role mappings
+	 */
+	public RoleConflictServiceImpl(RoleConflictRepository roleConflictRepository, AppRoleRepository appRoleRepository,
+<span class="fc" id="L44">			UserRoleRepositoryV2 userRoleRepository) {</span>
+<span class="fc" id="L45">		this.roleConflictRepository = roleConflictRepository;</span>
+<span class="fc" id="L46">		this.appRoleRepository = appRoleRepository;</span>
+<span class="fc" id="L47">		this.userRoleRepository = userRoleRepository;</span>
+<span class="fc" id="L48">	}</span>
+
+	@Override
+	@Transactional(readOnly = true)
+	public List&lt;RoleConflictResponse&gt; getAllRules() {
+<span class="fc" id="L53">		return roleConflictRepository.findAll().stream().map(this::toResponse).toList();</span>
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public RoleConflictResponse getRuleById(Long id) {
+
+<span class="pc bpc" id="L60" title="1 of 4 branches missed.">		if (id == null || id &lt;= 0) {</span>
+<span class="fc" id="L61">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Role conflict ID must be a positive number&quot;);</span>
+		}
+
+<span class="fc" id="L64">		RoleConflictEntity entity = roleConflictRepository.findById(id).orElseThrow(</span>
+<span class="fc" id="L65">				() -&gt; new ResponseStatusException(HttpStatus.NOT_FOUND, &quot;Role conflict rule not found: &quot; + id));</span>
+
+<span class="fc" id="L67">		return toResponse(entity);</span>
+	}
+
+	@Override
+	public void deleteRule(Long id) {
+
+<span class="pc bpc" id="L73" title="1 of 4 branches missed.">		if (id == null || id &lt;= 0) {</span>
+<span class="fc" id="L74">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Role conflict ID must be a positive number&quot;);</span>
+		}
+
+<span class="fc" id="L77">		RoleConflictEntity entity = roleConflictRepository.findById(id).orElseThrow(</span>
+<span class="fc" id="L78">				() -&gt; new ResponseStatusException(HttpStatus.NOT_FOUND, &quot;Role conflict rule not found: &quot; + id));</span>
+
+		try {
+<span class="fc" id="L81">			roleConflictRepository.delete(entity);</span>
+<span class="fc" id="L82">			roleConflictRepository.flush();</span>
+
+<span class="fc" id="L84">		} catch (DataIntegrityViolationException ex) {</span>
+<span class="fc" id="L85">			throw new ResponseStatusException(HttpStatus.CONFLICT,</span>
+					&quot;Cannot delete this role conflict rule because it is referenced by other records.&quot;, ex);
+<span class="fc" id="L87">		}</span>
+<span class="fc" id="L88">	}</span>
+
+	@Override
+	public RoleConflictResponse createRule(CreateRoleConflictRequest request) {
+
+<span class="fc bfc" id="L93" title="All 2 branches covered.">		if (request == null) {</span>
+<span class="fc" id="L94">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Request body is required&quot;);</span>
+		}
+
+<span class="pc bpc" id="L97" title="1 of 4 branches missed.">		if (request.getPair() == null || request.getPair().size() != 2) {</span>
+
+<span class="fc" id="L99">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Pair must contain exactly two role codes&quot;);</span>
+		}
+
+<span class="fc" id="L102">		String roleA = normalize(request.getPair().get(0));</span>
+<span class="fc" id="L103">		String roleB = normalize(request.getPair().get(1));</span>
+
+<span class="fc bfc" id="L105" title="All 2 branches covered.">		if (roleA.equals(roleB)) {</span>
+<span class="fc" id="L106">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;A role cannot conflict with itself&quot;);</span>
+		}
+
+<span class="fc" id="L109">		String severity = normalizeSeverity(request.getSeverity());</span>
+<span class="fc" id="L110">		String rationale = normalizeRationale(request.getRationale());</span>
+
+<span class="fc bfc" id="L112" title="All 2 branches covered.">		if (!appRoleRepository.existsById(roleA)) {</span>
+<span class="fc" id="L113">			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, &quot;Role does not exist: &quot; + roleA);</span>
+		}
+
+<span class="fc bfc" id="L116" title="All 2 branches covered.">		if (!appRoleRepository.existsById(roleB)) {</span>
+<span class="fc" id="L117">			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, &quot;Role does not exist: &quot; + roleB);</span>
+		}
+
+		// Enforce the database ordering constraint.
+		String first;
+		String second;
+
+<span class="fc bfc" id="L124" title="All 2 branches covered.">		if (roleA.compareTo(roleB) &lt; 0) {</span>
+<span class="fc" id="L125">			first = roleA;</span>
+<span class="fc" id="L126">			second = roleB;</span>
+		} else {
+<span class="fc" id="L128">			first = roleB;</span>
+<span class="fc" id="L129">			second = roleA;</span>
+		}
+
+		// Check for an existing pair, regardless of request order.
+<span class="fc bfc" id="L133" title="All 2 branches covered.">		if (roleConflictRepository.existsByRoleCodeAAndRoleCodeB(first, second)) {</span>
+
+<span class="fc" id="L135">			throw new ResponseStatusException(HttpStatus.CONFLICT,</span>
+					&quot;Role conflict already exists for &quot; + first + &quot; and &quot; + second);
+		}
+
+<span class="fc bfc" id="L139" title="All 2 branches covered.">		if (userRoleRepository.existsUserWithBothRoles(first, second)) {</span>
+<span class="fc" id="L140">			throw new ResponseStatusException(HttpStatus.CONFLICT,</span>
+					&quot;Cannot create role conflict because one or more users are already assigned both roles: &quot; + first
+							+ &quot; and &quot; + second);
+		}
+
+<span class="fc" id="L145">		RoleConflictEntity entity = RoleConflictEntity.builder().roleCodeA(first).roleCodeB(second).severity(severity)</span>
+<span class="fc" id="L146">				.rationale(rationale).build();</span>
+
+		try {
+<span class="fc" id="L149">			RoleConflictEntity saved = roleConflictRepository.saveAndFlush(entity);</span>
+
+<span class="fc" id="L151">			return toResponse(saved);</span>
+
+<span class="fc" id="L153">		} catch (DataIntegrityViolationException ex) {</span>
+<span class="fc" id="L154">			throw new ResponseStatusException(HttpStatus.CONFLICT,</span>
+					&quot;Role conflict could not be saved because &quot; + &quot;it violates a database constraint&quot;, ex);
+		}
+	}
+
+	private String normalize(String roleCode) {
+
+<span class="pc bpc" id="L161" title="1 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="fc" id="L162">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Role codes cannot be blank&quot;);</span>
+		}
+
+<span class="fc" id="L165">		String normalized = roleCode.trim().toUpperCase(Locale.ROOT);</span>
+
+<span class="fc bfc" id="L167" title="All 2 branches covered.">		if (normalized.length() &gt; 40) {</span>
+<span class="fc" id="L168">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Role code cannot exceed 40 characters&quot;);</span>
+		}
+
+<span class="fc" id="L171">		return normalized;</span>
+	}
+
+	private String normalizeSeverity(String severity) {
+
+<span class="pc bpc" id="L176" title="1 of 4 branches missed.">		if (severity == null || severity.isBlank()) {</span>
+<span class="fc" id="L177">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Severity is required&quot;);</span>
+		}
+
+<span class="fc" id="L180">		String normalized = severity.trim().toUpperCase(Locale.ROOT);</span>
+
+<span class="pc bpc" id="L182" title="1 of 4 branches missed.">		if (!SEVERITY_BLOCK.equals(normalized) &amp;&amp; !SEVERITY_WARN.equals(normalized)) {</span>
+<span class="fc" id="L183">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, &quot;Severity must be BLOCK or WARN&quot;);</span>
+		}
+
+<span class="fc" id="L186">		return normalized;</span>
+	}
+
+	private String normalizeRationale(String rationale) {
+
+<span class="pc bpc" id="L191" title="1 of 4 branches missed.">		if (rationale == null || rationale.isBlank()) {</span>
+<span class="fc" id="L192">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,</span>
+					&quot;Rationale must contain between 1 and 400 characters&quot;);
+		}
+
+<span class="fc" id="L196">		String normalized = rationale.trim();</span>
+
+<span class="fc bfc" id="L198" title="All 2 branches covered.">		if (normalized.length() &gt; 400) {</span>
+<span class="fc" id="L199">			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,</span>
+					&quot;Rationale must contain between 1 and 400 characters&quot;);
+		}
+
+<span class="fc" id="L203">		return normalized;</span>
+	}
+
+	private RoleConflictResponse toResponse(RoleConflictEntity entity) {
+
+<span class="fc" id="L208">		return new RoleConflictResponse(&quot;rcr-&quot; + entity.getConflictId(),</span>
+<span class="fc" id="L209">				List.of(entity.getRoleCodeA(), entity.getRoleCodeB()), entity.getSeverity(), entity.getRationale());</span>
+	}
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

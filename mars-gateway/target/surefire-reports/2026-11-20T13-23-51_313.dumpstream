@@ -1,0 +1,5 @@
+# Created at 2026-11-20T13:23:51.567
+Boot Manifest-JAR contains absolute paths in classpath 'D:\Empay\workspace\MARS3\trunk\mars-gateway\mars-gateway\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

@@ -1,0 +1,6 @@
+com\empay\mars_gateway\utils\UserManagementPermissionUtilsTest.class
+com\empay\mars_gateway\utils\UserActivityTrackingFilterTokenResolutionTest.class
+com\empay\mars_gateway\utils\ParameterPermissionUtilsTest.class
+com\empay\mars_gateway\utils\UserActivityTrackingFilterResponseDetailTest.class
+com\empay\mars_gateway\utils\UserActivityTrackingFilterClientIpTest.class
+com\empay\mars_gateway\utils\UserActivityTrackingFilterPermissionTest.class

@@ -1,0 +1,713 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserAuthMethodServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">UserAuthMethodServiceImpl.java</span></div><h1>UserAuthMethodServiceImpl.java</h1><pre class="source lang-java linenums">package com.empay.user_management.serviceimpl;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.empay.user_management.dto.AuthProviderDto;
+import com.empay.user_management.dto.ConfigureAuthMethodRequest;
+import com.empay.user_management.dto.OAuthLoginRequest;
+import com.empay.user_management.dto.UserAuthMethodDto;
+import com.empay.user_management.dto.UserAuthMethodsOverviewResponse;
+import com.empay.user_management.entities.AuthProviderConfigEntity;
+import com.empay.user_management.entities.LoginAttemptEntity;
+import com.empay.user_management.entities.UserAuthMethodEntity;
+import com.empay.user_management.entities.UserCredentialEntity;
+import com.empay.user_management.entities.UserRoleEntityV2;
+import com.empay.user_management.entities.UsersEntityV2;
+import com.empay.user_management.exceptions.ResourceNotFoundException;
+import com.empay.user_management.repository.LoginAttemptRepository;
+import com.empay.user_management.repository.UserAuthMethodRepository;
+import com.empay.user_management.repository.UserCredentialRepository;
+import com.empay.user_management.repository.UserRoleRepositoryV2;
+import com.empay.user_management.repository.UsersRepositoryV2;
+import com.empay.user_management.service.AuthProviderConfigService;
+import com.empay.user_management.service.UserAuthMethodService;
+import com.empay.user_management.utils.APIConstants;
+import com.empay.user_management.utils.JwtUtils;
+
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class UserAuthMethodServiceImpl implements UserAuthMethodService {
+
+<span class="fc" id="L62">	private static final Logger log = LoggerFactory.getLogger(UserAuthMethodServiceImpl.class);</span>
+
+	public static final String PROVIDER_LOCAL_PASSWORD = &quot;LOCAL_PASSWORD&quot;;
+	public static final String PROVIDER_GITHUB = &quot;GITHUB&quot;;
+
+	private static final String DEFAULT_ACTOR = &quot;ADMIN&quot;;
+	private static final String MESSAGE = &quot;message&quot;;
+	private static final String AUTHENTICATED = &quot;authenticated&quot;;
+	private static final String FIELD_EMAIL = &quot;email&quot;;
+
+	private final UsersRepositoryV2 usersRepository;
+	private final UserAuthMethodRepository authMethodRepository;
+	private final UserCredentialRepository credentialRepository;
+	private final AuthProviderConfigService authProviderConfigService;
+	private final LoginAttemptRepository loginAttemptRepository;
+	private final JwtUtils jwtUtils;
+	private final UserRoleRepositoryV2 userRoleRepository;
+	private final ObjectMapper objectMapper = new ObjectMapper();
+
+	@Value(&quot;${server.servlet.session.cookie.secure:true}&quot;)
+	private boolean cookieSecure = true;
+
+	// Finding S1: Change inline default to false so absence means off
+	@Value(&quot;${app.oauth.direct-login.enabled:false}&quot;)
+	private boolean directLoginEnabled = false;
+
+	@Override
+	@Transactional(readOnly = true)
+	public UserAuthMethodsOverviewResponse getUserAuthMethods(String userId) {
+<span class="fc" id="L91">		return fetchUserAuthMethodsOverview(userId);</span>
+	}
+
+	private UserAuthMethodsOverviewResponse fetchUserAuthMethodsOverview(String userId) {
+<span class="fc" id="L95">		UsersEntityV2 user = findUserOrThrow(userId);</span>
+<span class="fc" id="L96">		List&lt;UserAuthMethodEntity&gt; configuredEntities = authMethodRepository.findByUserSerialNo(user.getSerialNumber());</span>
+<span class="fc" id="L97">		Map&lt;String, UserAuthMethodEntity&gt; entityMap = configuredEntities.stream()</span>
+<span class="pc" id="L98">				.collect(Collectors.toMap(e -&gt; e.getProvider().toUpperCase(), e -&gt; e, (a, b) -&gt; a));</span>
+
+<span class="fc" id="L100">		UserCredentialEntity credential = credentialRepository.findByUserSerialNo(user.getSerialNumber());</span>
+<span class="pc bpc" id="L101" title="2 of 6 branches missed.">		boolean hasLocalPassword = credential != null &amp;&amp; credential.getPasswordHash() != null &amp;&amp; !credential.getPasswordHash().isBlank();</span>
+
+<span class="fc" id="L103">		List&lt;AuthProviderConfigEntity&gt; systemProviders = authProviderConfigService.getAllCachedProviders();</span>
+<span class="pc bpc" id="L104" title="2 of 4 branches missed.">		if (systemProviders == null || systemProviders.isEmpty()) {</span>
+<span class="nc" id="L105">			authProviderConfigService.refreshCache();</span>
+<span class="nc" id="L106">			systemProviders = authProviderConfigService.getAllCachedProviders();</span>
+		}
+
+<span class="fc" id="L109">		List&lt;UserAuthMethodDto&gt; dtos = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">		for (AuthProviderConfigEntity sysProv : systemProviders) {</span>
+<span class="pc bpc" id="L111" title="2 of 4 branches missed.">			if (sysProv.getIsEnabled() != null &amp;&amp; sysProv.getIsEnabled() == 'Y') {</span>
+<span class="fc" id="L112">				dtos.add(buildUserAuthMethodDto(sysProv, entityMap, user, hasLocalPassword));</span>
+			}
+<span class="fc" id="L114">		}</span>
+
+<span class="fc" id="L116">		ensurePrimaryMethod(dtos);</span>
+
+<span class="fc" id="L118">		String primaryMethod = dtos.stream()</span>
+<span class="fc" id="L119">				.filter(UserAuthMethodDto::isPrimary)</span>
+<span class="fc" id="L120">				.map(UserAuthMethodDto::getProvider)</span>
+<span class="fc" id="L121">				.findFirst()</span>
+<span class="fc" id="L122">				.orElse(PROVIDER_LOCAL_PASSWORD);</span>
+
+<span class="fc" id="L124">		return UserAuthMethodsOverviewResponse.builder()</span>
+<span class="fc" id="L125">				.userId(user.getUserId())</span>
+<span class="fc" id="L126">				.userSerialNumber(user.getSerialNumber())</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">				.displayName(user.getDisplayName() != null ? user.getDisplayName() : user.getUserId())</span>
+<span class="fc" id="L128">				.email(user.getEmail())</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">				.status(user.getStatus() != null ? user.getStatus() : &quot;ACTIVE&quot;)</span>
+<span class="fc" id="L130">				.isBreakGlass(false)</span>
+<span class="fc" id="L131">				.primaryMethod(primaryMethod)</span>
+<span class="fc" id="L132">				.methods(dtos)</span>
+<span class="fc" id="L133">				.build();</span>
+	}
+
+	private UserAuthMethodDto buildUserAuthMethodDto(AuthProviderConfigEntity sysProv,
+			Map&lt;String, UserAuthMethodEntity&gt; entityMap, UsersEntityV2 user, boolean hasLocalPassword) {
+<span class="fc" id="L138">		String pId = sysProv.getProviderId().toUpperCase();</span>
+<span class="fc" id="L139">		UserAuthMethodEntity userConfig = entityMap.get(pId);</span>
+
+<span class="fc bfc" id="L141" title="All 6 branches covered.">		boolean isLinked = userConfig != null || (PROVIDER_LOCAL_PASSWORD.equals(pId) &amp;&amp; hasLocalPassword);</span>
+<span class="pc bpc" id="L142" title="1 of 4 branches missed.">		boolean isMethodEnabled = userConfig == null || userConfig.getIsEnabled() == 'Y';</span>
+<span class="fc bfc" id="L143" title="All 4 branches covered.">		boolean isPrimary = userConfig != null &amp;&amp; userConfig.getIsPrimary() == 'Y';</span>
+
+<span class="fc bfc" id="L145" title="All 2 branches covered.">		String extSubject = userConfig != null ? userConfig.getExternalSubject() : null;</span>
+<span class="fc bfc" id="L146" title="All 2 branches covered.">		String extUsername = userConfig != null ? userConfig.getExternalUsername() : null;</span>
+<span class="fc" id="L147">		String extEmail = resolveExternalEmail(userConfig, pId, user);</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">		LocalDateTime linkedAt = userConfig != null ? userConfig.getLinkedAt() : null;</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">		LocalDateTime lastLoginAt = userConfig != null ? userConfig.getLastLoginAt() : null;</span>
+
+<span class="fc" id="L151">		return UserAuthMethodDto.builder()</span>
+<span class="fc" id="L152">				.provider(pId)</span>
+<span class="fc" id="L153">				.providerName(sysProv.getName())</span>
+<span class="fc" id="L154">				.providerType(sysProv.getType())</span>
+<span class="fc" id="L155">				.isLinked(isLinked)</span>
+<span class="fc" id="L156">				.isEnabled(isMethodEnabled)</span>
+<span class="fc" id="L157">				.isPrimary(isPrimary)</span>
+<span class="fc" id="L158">				.externalSubject(extSubject)</span>
+<span class="fc" id="L159">				.externalUsername(extUsername)</span>
+<span class="fc" id="L160">				.externalEmail(extEmail)</span>
+<span class="fc" id="L161">				.linkedAt(linkedAt)</span>
+<span class="fc" id="L162">				.lastLoginAt(lastLoginAt)</span>
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">				.icon(sysProv.getIcon() != null ? sysProv.getIcon() : pId.toLowerCase())</span>
+<span class="fc" id="L164">				.build();</span>
+	}
+
+	private String resolveExternalEmail(UserAuthMethodEntity userConfig, String providerId, UsersEntityV2 user) {
+<span class="fc bfc" id="L168" title="All 2 branches covered.">		if (userConfig != null) {</span>
+<span class="fc" id="L169">			return userConfig.getExternalEmail();</span>
+		}
+<span class="fc bfc" id="L171" title="All 2 branches covered.">		if (PROVIDER_LOCAL_PASSWORD.equals(providerId)) {</span>
+<span class="fc" id="L172">			return user.getEmail();</span>
+		}
+<span class="fc" id="L174">		return null;</span>
+	}
+
+	private void ensurePrimaryMethod(List&lt;UserAuthMethodDto&gt; dtos) {
+<span class="fc" id="L178">		boolean hasConfiguredPrimary = dtos.stream().anyMatch(UserAuthMethodDto::isPrimary);</span>
+<span class="pc bpc" id="L179" title="1 of 4 branches missed.">		if (!hasConfiguredPrimary &amp;&amp; !dtos.isEmpty()) {</span>
+<span class="fc" id="L180">			dtos.stream()</span>
+<span class="pc bpc" id="L181" title="1 of 4 branches missed.">					.filter(d -&gt; d.isLinked() &amp;&amp; d.isEnabled())</span>
+<span class="fc" id="L182">					.findFirst()</span>
+<span class="fc" id="L183">					.ifPresent(d -&gt; d.setPrimary(true));</span>
+		}
+<span class="fc" id="L185">	}</span>
+
+	@Override
+	@Transactional
+	public UserAuthMethodsOverviewResponse configureUserAuthMethod(String userId, ConfigureAuthMethodRequest request, String actor) {
+<span class="pc bpc" id="L190" title="1 of 6 branches missed.">		if (request == null || request.getProvider() == null || request.getProvider().isBlank()) {</span>
+<span class="fc" id="L191">			throw new IllegalArgumentException(&quot;Provider must be specified&quot;);</span>
+		}
+
+<span class="fc" id="L194">		UsersEntityV2 user = findUserOrThrow(userId);</span>
+<span class="fc" id="L195">		String provider = request.getProvider().trim().toUpperCase();</span>
+<span class="fc" id="L196">		validateSystemProviderExists(provider);</span>
+
+<span class="pc bpc" id="L198" title="1 of 4 branches missed.">		String cleanSubject = (request.getExternalSubject() != null &amp;&amp; !request.getExternalSubject().isBlank())</span>
+<span class="fc" id="L199">				? request.getExternalSubject().trim() : null;</span>
+<span class="pc bpc" id="L200" title="1 of 4 branches missed.">		String cleanUsername = (request.getExternalUsername() != null &amp;&amp; !request.getExternalUsername().isBlank())</span>
+<span class="fc" id="L201">				? request.getExternalUsername().trim() : cleanSubject;</span>
+
+<span class="fc" id="L203">		validateExternalIdentityUnique(provider, cleanSubject, cleanUsername, user.getSerialNumber());</span>
+
+<span class="fc" id="L205">		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">		String effectiveActor = actor != null ? actor : DEFAULT_ACTOR;</span>
+
+<span class="fc" id="L208">		UserAuthMethodEntity entity = authMethodRepository.findByUserSerialNoAndProvider(user.getSerialNumber(), provider)</span>
+<span class="fc" id="L209">				.map(existing -&gt; updateUserAuthMethodEntity(existing, cleanSubject, cleanUsername, request, effectiveActor))</span>
+<span class="fc" id="L210">				.orElseGet(() -&gt; createUserAuthMethodEntity(user, provider, cleanSubject, cleanUsername, request, effectiveActor, now));</span>
+
+<span class="fc bfc" id="L212" title="All 2 branches covered.">		if (Boolean.TRUE.equals(request.getIsPrimary())) {</span>
+<span class="fc" id="L213">			promoteToPrimary(user, provider, cleanSubject, entity);</span>
+		}
+
+<span class="fc" id="L216">		authMethodRepository.save(entity);</span>
+<span class="fc" id="L217">		log.info(&quot;Configured auth method [{}] for user [{}] by actor [{}]&quot;, provider, userId, actor);</span>
+
+<span class="fc" id="L219">		return fetchUserAuthMethodsOverview(userId);</span>
+	}
+
+	private void validateSystemProviderExists(String provider) {
+<span class="fc" id="L223">		Optional&lt;AuthProviderConfigEntity&gt; sysProv = authProviderConfigService.getCachedProvider(provider);</span>
+<span class="fc bfc" id="L224" title="All 2 branches covered.">		if (sysProv.isEmpty()) {</span>
+<span class="fc" id="L225">			throw new IllegalArgumentException(&quot;Authentication provider [&quot; + provider + &quot;] is not configured in system.&quot;);</span>
+		}
+<span class="fc" id="L227">	}</span>
+
+	private void validateExternalIdentityUnique(String provider, String cleanSubject, String cleanUsername, Integer userSerialNo) {
+<span class="pc bpc" id="L230" title="2 of 6 branches missed.">		if (cleanSubject != null &amp;&amp; !cleanSubject.isBlank() &amp;&amp; !PROVIDER_LOCAL_PASSWORD.equals(provider)</span>
+<span class="fc bfc" id="L231" title="All 2 branches covered.">				&amp;&amp; authMethodRepository.existsByProviderAndExternalSubjectAndUserSerialNoNot(provider, cleanSubject, userSerialNo)) {</span>
+<span class="fc" id="L232">			throw new IllegalArgumentException(&quot;The &quot; + provider + &quot; identity [&quot; + cleanSubject + &quot;] is already linked to another MARS user.&quot;);</span>
+		}
+<span class="pc bpc" id="L234" title="3 of 6 branches missed.">		if (cleanUsername != null &amp;&amp; !cleanUsername.isBlank() &amp;&amp; !PROVIDER_LOCAL_PASSWORD.equals(provider)</span>
+<span class="fc bfc" id="L235" title="All 2 branches covered.">				&amp;&amp; authMethodRepository.existsByProviderAndExternalUsernameAndUserSerialNoNot(provider, cleanUsername, userSerialNo)) {</span>
+<span class="fc" id="L236">			throw new IllegalArgumentException(&quot;The &quot; + provider + &quot; handle [&quot; + cleanUsername + &quot;] is already linked to another MARS user.&quot;);</span>
+		}
+<span class="fc" id="L238">	}</span>
+
+	private UserAuthMethodEntity updateUserAuthMethodEntity(UserAuthMethodEntity entity, String cleanSubject,
+			String cleanUsername, ConfigureAuthMethodRequest request, String actor) {
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">		if (cleanSubject != null) entity.setExternalSubject(cleanSubject);</span>
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">		if (cleanUsername != null) entity.setExternalUsername(cleanUsername);</span>
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">		if (request.getExternalEmail() != null) entity.setExternalEmail(request.getExternalEmail().trim());</span>
+<span class="pc bpc" id="L245" title="2 of 4 branches missed.">		if (request.getIsEnabled() != null) entity.setIsEnabled(request.getIsEnabled().booleanValue() ? 'Y' : 'N');</span>
+<span class="pc bpc" id="L246" title="1 of 2 branches missed.">		if (request.getMetadataJson() != null) entity.setMetadataJson(request.getMetadataJson());</span>
+<span class="fc" id="L247">		entity.setLinkedBy(actor);</span>
+<span class="fc" id="L248">		return entity;</span>
+	}
+
+	private UserAuthMethodEntity createUserAuthMethodEntity(UsersEntityV2 user, String provider, String cleanSubject,
+			String cleanUsername, ConfigureAuthMethodRequest request, String actor, LocalDateTime now) {
+<span class="fc" id="L253">		return UserAuthMethodEntity.builder()</span>
+<span class="fc" id="L254">				.userSerialNo(user.getSerialNumber())</span>
+<span class="fc" id="L255">				.provider(provider)</span>
+<span class="pc bpc" id="L256" title="1 of 2 branches missed.">				.externalSubject(cleanSubject != null ? cleanSubject : cleanUsername)</span>
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">				.externalUsername(cleanUsername != null ? cleanUsername : cleanSubject)</span>
+<span class="pc bpc" id="L258" title="1 of 2 branches missed.">				.externalEmail(request.getExternalEmail() != null ? request.getExternalEmail().trim() : user.getEmail())</span>
+<span class="pc bpc" id="L259" title="1 of 2 branches missed.">				.isEnabled(Boolean.FALSE.equals(request.getIsEnabled()) ? 'N' : 'Y')</span>
+<span class="fc" id="L260">				.isPrimary('N')</span>
+<span class="fc" id="L261">				.linkedBy(actor)</span>
+<span class="fc" id="L262">				.linkedAt(now)</span>
+<span class="fc" id="L263">				.metadataJson(request.getMetadataJson())</span>
+<span class="fc" id="L264">				.build();</span>
+	}
+
+	private void promoteToPrimary(UsersEntityV2 user, String provider, String cleanSubject, UserAuthMethodEntity entity) {
+<span class="fc" id="L268">		List&lt;UserAuthMethodEntity&gt; allMethods = authMethodRepository.findByUserSerialNo(user.getSerialNumber());</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">		for (UserAuthMethodEntity other : allMethods) {</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">			if (!other.getProvider().equalsIgnoreCase(provider)) {</span>
+<span class="nc" id="L271">				other.setIsPrimary('N');</span>
+<span class="nc" id="L272">				authMethodRepository.save(other);</span>
+			}
+<span class="nc" id="L274">		}</span>
+<span class="fc" id="L275">		entity.setIsPrimary('Y');</span>
+<span class="pc bpc" id="L276" title="2 of 4 branches missed.">		if (!PROVIDER_LOCAL_PASSWORD.equals(provider) &amp;&amp; cleanSubject != null) {</span>
+<span class="fc" id="L277">			user.setIdpSubject(cleanSubject);</span>
+<span class="fc" id="L278">			usersRepository.save(user);</span>
+		}
+<span class="fc" id="L280">	}</span>
+
+	@Override
+	@Transactional
+	public UserAuthMethodsOverviewResponse unlinkUserAuthMethod(String userId, String provider, String actor) {
+<span class="fc" id="L285">		UsersEntityV2 user = findUserOrThrow(userId);</span>
+<span class="fc" id="L286">		String targetProvider = provider.trim().toUpperCase();</span>
+
+<span class="fc" id="L288">		Optional&lt;UserAuthMethodEntity&gt; existingOpt = authMethodRepository.findByUserSerialNoAndProvider(user.getSerialNumber(), targetProvider);</span>
+<span class="fc bfc" id="L289" title="All 2 branches covered.">		if (existingOpt.isEmpty()) {</span>
+<span class="fc" id="L290">			throw new IllegalArgumentException(&quot;Auth method [&quot; + targetProvider + &quot;] is not linked to user [&quot; + userId + &quot;].&quot;);</span>
+		}
+
+		// Check if primary
+<span class="pc bpc" id="L294" title="1 of 2 branches missed.">		if (existingOpt.get().getIsPrimary() == 'Y') {</span>
+<span class="fc" id="L295">			List&lt;UserAuthMethodEntity&gt; remaining = authMethodRepository.findByUserSerialNo(user.getSerialNumber()).stream()</span>
+<span class="pc bpc" id="L296" title="1 of 4 branches missed.">					.filter(m -&gt; !m.getProvider().equalsIgnoreCase(targetProvider) &amp;&amp; m.getIsEnabled() == 'Y')</span>
+<span class="fc" id="L297">					.toList();</span>
+
+<span class="fc bfc" id="L299" title="All 2 branches covered.">			if (!remaining.isEmpty()) {</span>
+<span class="fc" id="L300">				UserAuthMethodEntity newPrimary = remaining.get(0);</span>
+<span class="fc" id="L301">				newPrimary.setIsPrimary('Y');</span>
+<span class="fc" id="L302">				authMethodRepository.save(newPrimary);</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">				if (!PROVIDER_LOCAL_PASSWORD.equals(newPrimary.getProvider())) {</span>
+<span class="fc" id="L304">					user.setIdpSubject(newPrimary.getExternalSubject());</span>
+<span class="fc" id="L305">					usersRepository.save(user);</span>
+				}
+			}
+		}
+
+<span class="fc" id="L310">		authMethodRepository.delete(existingOpt.get());</span>
+
+<span class="pc bpc" id="L312" title="1 of 4 branches missed.">		if (user.getIdpSubject() != null &amp;&amp; user.getIdpSubject().equals(existingOpt.get().getExternalSubject())) {</span>
+<span class="fc" id="L313">			user.setIdpSubject(null);</span>
+<span class="fc" id="L314">			usersRepository.save(user);</span>
+		}
+
+<span class="fc" id="L317">		log.info(&quot;Unlinked auth method [{}] from user [{}] by actor [{}]&quot;, targetProvider, userId, actor);</span>
+<span class="fc" id="L318">		return fetchUserAuthMethodsOverview(userId);</span>
+	}
+
+	@Override
+	public List&lt;AuthProviderDto&gt; getSystemAuthProviders() {
+<span class="fc" id="L323">		return authProviderConfigService.getPublicEnabledProviders();</span>
+	}
+
+	@Override
+	@Transactional
+	public ResponseEntity&lt;Object&gt; authenticateWithOAuth(OAuthLoginRequest request, HttpServletRequest httpRequest) {
+<span class="pc bpc" id="L329" title="1 of 6 branches missed.">		if (request == null || request.getProvider() == null || request.getProvider().isBlank()) {</span>
+<span class="fc" id="L330">			return ResponseEntity.badRequest().body(Map.of(MESSAGE, &quot;Provider is required (e.g. GITHUB, GOOGLE, MICROSOFT)&quot;));</span>
+		}
+
+<span class="fc" id="L333">		String provider = request.getProvider().trim().toUpperCase();</span>
+
+		// 1. Verify system provider configuration is active
+<span class="fc" id="L336">		Optional&lt;AuthProviderConfigEntity&gt; configOpt = authProviderConfigService.getCachedProvider(provider);</span>
+<span class="pc bpc" id="L337" title="2 of 6 branches missed.">		if (configOpt.isEmpty() || configOpt.get().getIsEnabled() == null || configOpt.get().getIsEnabled() != 'Y') {</span>
+<span class="fc" id="L338">			return ResponseEntity.badRequest().body(Map.of(</span>
+<span class="fc" id="L339">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;Provider [&quot; + provider + &quot;] is not enabled in system configuration.&quot;
+			));
+		}
+<span class="fc" id="L343">		AuthProviderConfigEntity config = configOpt.get();</span>
+
+		// 2. Resolve identity from OAuth request (exchange code or direct login)
+		OAuthProfile profile;
+		try {
+<span class="fc" id="L348">			profile = resolveOAuthIdentity(request, config, provider);</span>
+<span class="fc" id="L349">		} catch (OAuthAuthenticationException ex) {</span>
+<span class="fc" id="L350">			return ResponseEntity.status(ex.getStatus()).body(Map.of(</span>
+<span class="fc" id="L351">					AUTHENTICATED, false,</span>
+<span class="fc" id="L352">					MESSAGE, ex.getMessage()</span>
+			));
+<span class="fc" id="L354">		}</span>
+
+<span class="fc" id="L356">		String resolvedSubject = profile.subject();</span>
+<span class="pc bpc" id="L357" title="2 of 4 branches missed.">		if (resolvedSubject == null || resolvedSubject.isBlank()) {</span>
+<span class="nc" id="L358">			recordLoginAttempt(&quot;UNKNOWN&quot;, null, 'N', &quot;OAUTH_SUBJECT_MISSING&quot;, httpRequest);</span>
+<span class="nc" id="L359">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="nc" id="L360">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;Identity provider did not return a valid subject identifier.&quot;
+			));
+		}
+
+		// 3. Resolve linked MARS user from USER_AUTH_METHOD strictly by subject (Finding T1)
+<span class="fc" id="L366">		Optional&lt;UserAuthMethodEntity&gt; authMethodOpt = lookupLinkedAuthMethod(provider, resolvedSubject);</span>
+
+<span class="fc bfc" id="L368" title="All 2 branches covered.">		if (authMethodOpt.isEmpty()) {</span>
+<span class="fc" id="L369">			recordLoginAttempt(resolvedSubject, null, 'N', &quot;OAUTH_USER_NOT_LINKED&quot;, httpRequest);</span>
+<span class="fc" id="L370">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L371">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;No MARS account is linked to the &quot; + provider + &quot; identity (&quot; + resolvedSubject + &quot;). Please create the user in MARS and link this method in User Management settings.&quot;
+			));
+		}
+
+<span class="fc" id="L376">		UserAuthMethodEntity authMethod = authMethodOpt.get();</span>
+
+		// 4. Verify linked MARS user exists in MARS app and account is eligible
+<span class="fc" id="L379">		UsersEntityV2 user = usersRepository.findBySerialNumber(authMethod.getUserSerialNo());</span>
+<span class="fc" id="L380">		ResponseEntity&lt;Object&gt; eligibilityError = validateUserAccountEligibility(user, authMethod, provider, resolvedSubject, httpRequest);</span>
+<span class="fc bfc" id="L381" title="All 2 branches covered.">		if (eligibilityError != null) {</span>
+<span class="fc" id="L382">			return eligibilityError;</span>
+		}
+
+		// 5. Update last login timestamp
+<span class="fc" id="L386">		authMethod.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));</span>
+<span class="fc" id="L387">		authMethodRepository.save(authMethod);</span>
+
+<span class="fc" id="L389">		recordLoginAttempt(user.getUserId(), user.getSerialNumber(), 'Y', null, httpRequest);</span>
+
+		// 6. Mint JWT session token and secure cookies
+<span class="fc" id="L392">		return buildOAuthSuccessResponse(user, provider);</span>
+	}
+
+	private ResponseEntity&lt;Object&gt; validateUserAccountEligibility(UsersEntityV2 user, UserAuthMethodEntity authMethod,
+			String provider, String resolvedSubject, HttpServletRequest httpRequest) {
+<span class="fc bfc" id="L397" title="All 2 branches covered.">		if (user == null) {</span>
+<span class="fc" id="L398">			recordLoginAttempt(resolvedSubject, null, 'N', &quot;MARS_USER_NOT_FOUND&quot;, httpRequest);</span>
+<span class="fc" id="L399">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L400">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;Linked MARS user account not found in database.&quot;
+			));
+		}
+
+<span class="fc bfc" id="L405" title="All 2 branches covered.">		if (!&quot;ACTIVE&quot;.equalsIgnoreCase(user.getStatus())) {</span>
+<span class="fc" id="L406">			recordLoginAttempt(user.getUserId(), user.getSerialNumber(), 'N', &quot;USER_NOT_ACTIVE&quot;, httpRequest);</span>
+<span class="fc" id="L407">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L408">					AUTHENTICATED, false,</span>
+<span class="pc bpc" id="L409" title="1 of 2 branches missed.">					MESSAGE, &quot;Your MARS user account is &quot; + (user.getStatus() != null ? user.getStatus().toLowerCase() : &quot;inactive&quot;) + &quot;. Please contact your system administrator.&quot;</span>
+			));
+		}
+
+		// Finding S2: Treat null is_enabled as disabled!
+<span class="fc bfc" id="L414" title="All 4 branches covered.">		if (authMethod.getIsEnabled() == null || Character.toUpperCase(authMethod.getIsEnabled()) != 'Y') {</span>
+<span class="fc" id="L415">			recordLoginAttempt(user.getUserId(), user.getSerialNumber(), 'N', &quot;OAUTH_METHOD_DISABLED&quot;, httpRequest);</span>
+<span class="fc" id="L416">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L417">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;The &quot; + provider + &quot; authentication method has been disabled for your account.&quot;
+			));
+		}
+
+		// Finding S2: Early guard enforcing auth_mode on user
+<span class="fc" id="L423">		String authMode = user.getAuthMode();</span>
+<span class="pc bpc" id="L424" title="1 of 4 branches missed.">		if (authMode != null &amp;&amp; !authMode.isBlank()) {</span>
+<span class="fc" id="L425">			String cleanMode = authMode.trim().toUpperCase(java.util.Locale.ROOT);</span>
+<span class="pc bpc" id="L426" title="1 of 6 branches missed.">			if (&quot;LOCAL&quot;.equals(cleanMode) || PROVIDER_LOCAL_PASSWORD.equals(cleanMode) || &quot;PASSWORD_ONLY&quot;.equals(cleanMode)) {</span>
+<span class="fc" id="L427">				recordLoginAttempt(user.getUserId(), user.getSerialNumber(), 'N', &quot;OAUTH_AUTH_DISABLED&quot;, httpRequest);</span>
+<span class="fc" id="L428">				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L429">						AUTHENTICATED, false,</span>
+						MESSAGE, &quot;OAuth login is disabled for your account.&quot;
+				));
+			}
+		}
+
+<span class="fc" id="L435">		UserCredentialEntity credential = credentialRepository.findByUserSerialNo(user.getSerialNumber());</span>
+<span class="fc" id="L436">		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);</span>
+<span class="pc bpc" id="L437" title="2 of 6 branches missed.">		if (credential != null &amp;&amp; credential.getLockedUntil() != null &amp;&amp; credential.getLockedUntil().isAfter(now)) {</span>
+<span class="fc" id="L438">			recordLoginAttempt(user.getUserId(), user.getSerialNumber(), 'N', &quot;ACCOUNT_LOCKED&quot;, httpRequest);</span>
+<span class="fc" id="L439">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(</span>
+<span class="fc" id="L440">					AUTHENTICATED, false,</span>
+					MESSAGE, &quot;Your account is temporarily locked. Please try again later or contact your administrator.&quot;
+			));
+		}
+
+<span class="fc" id="L445">		return null;</span>
+	}
+
+	private OAuthProfile resolveOAuthIdentity(OAuthLoginRequest request, AuthProviderConfigEntity config, String provider) throws OAuthAuthenticationException {
+<span class="pc bpc" id="L449" title="3 of 4 branches missed.">		if (request.getCode() != null &amp;&amp; !request.getCode().isBlank()) {</span>
+			try {
+<span class="nc" id="L451">				return exchangeCodeWithProvider(config, request.getCode(), request.getRedirectUri());</span>
+<span class="nc" id="L452">			} catch (InterruptedException ex) {</span>
+<span class="nc" id="L453">				Thread.currentThread().interrupt();</span>
+<span class="nc" id="L454">				log.warn(&quot;OAuth token exchange interrupted for provider [{}]: {}&quot;, provider, ex.getMessage());</span>
+<span class="nc" id="L455">				throw new OAuthAuthenticationException(HttpStatus.UNAUTHORIZED, &quot;OAuth exchange interrupted: &quot; + ex.getMessage());</span>
+<span class="nc" id="L456">			} catch (IOException | RuntimeException ex) {</span>
+<span class="nc" id="L457">				log.warn(&quot;OAuth server-side token exchange failed for provider [{}]: {}&quot;, provider, ex.getMessage());</span>
+<span class="nc" id="L458">				throw new OAuthAuthenticationException(HttpStatus.UNAUTHORIZED, &quot;OAuth token exchange with &quot; + provider + &quot; failed: &quot; + ex.getMessage());</span>
+			}
+		}
+
+<span class="pc bpc" id="L462" title="1 of 4 branches missed.">		if (request.getIdentity() != null &amp;&amp; !request.getIdentity().isBlank()) {</span>
+<span class="fc bfc" id="L463" title="All 2 branches covered.">			if (!directLoginEnabled) {</span>
+<span class="fc" id="L464">				throw new OAuthAuthenticationException(HttpStatus.FORBIDDEN, &quot;Direct OAuth identity login is disabled in production. Full OAuth authorization code flow is required.&quot;);</span>
+			}
+<span class="fc" id="L466">			String identity = request.getIdentity().trim();</span>
+<span class="fc" id="L467">			return new OAuthProfile(identity, identity, null);</span>
+		}
+
+<span class="fc" id="L470">		throw new OAuthAuthenticationException(HttpStatus.BAD_REQUEST, &quot;Either authorization code or linked identity must be supplied&quot;);</span>
+	}
+
+	private Optional&lt;UserAuthMethodEntity&gt; lookupLinkedAuthMethod(String provider, String resolvedSubject) {
+<span class="pc bpc" id="L474" title="2 of 4 branches missed.">		if (resolvedSubject == null || resolvedSubject.isBlank()) {</span>
+<span class="nc" id="L475">			return Optional.empty();</span>
+		}
+<span class="fc" id="L477">		String cleanSubject = resolvedSubject.trim();</span>
+		// 1. the authoritative mapping
+<span class="fc" id="L479">		Optional&lt;UserAuthMethodEntity&gt; byMethod =</span>
+<span class="fc" id="L480">				authMethodRepository.findByProviderAndExternalSubject(provider, cleanSubject);</span>
+<span class="fc bfc" id="L481" title="All 2 branches covered.">		if (byMethod.isPresent()) {</span>
+<span class="fc" id="L482">			return byMethod;</span>
+		}
+
+		// 2. legacy USERS.idp_subject, READ ONLY, for the migration window only.
+		//    No save, no auto-create, no auth-mode change: whatever is stored is what
+		//    the eligibility check below must see.
+<span class="fc" id="L488">		UsersEntityV2 idpUser = usersRepository.findByIdpSubject(cleanSubject);</span>
+<span class="fc bfc" id="L489" title="All 2 branches covered.">		if (idpUser == null) {</span>
+<span class="fc" id="L490">			idpUser = usersRepository.findByIdpSubject(provider + &quot;:&quot; + cleanSubject);</span>
+		}
+<span class="fc bfc" id="L492" title="All 2 branches covered.">		if (idpUser == null) {</span>
+<span class="fc" id="L493">			return Optional.empty();</span>
+		}
+<span class="fc" id="L495">		return authMethodRepository.findByUserSerialNoAndProvider(idpUser.getSerialNumber(), provider);</span>
+	}
+
+	private ResponseEntity&lt;Object&gt; buildOAuthSuccessResponse(UsersEntityV2 user, String provider) {
+<span class="fc" id="L499">		String userRole = resolveUserRole(user);</span>
+<span class="fc" id="L500">		String token = jwtUtils.generateToken(user.getUserId(), user.getSerialNumber(), userRole);</span>
+
+<span class="fc" id="L502">		ResponseCookie accessCookie = createAuthCookie(&quot;ACCESS_TOKEN&quot;, token);</span>
+<span class="fc" id="L503">		ResponseCookie authCookie = createAuthCookie(&quot;AUTH_TOKEN&quot;, token);</span>
+
+<span class="fc" id="L505">		Map&lt;String, Object&gt; responseBody = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L506">		responseBody.put(AUTHENTICATED, true);</span>
+<span class="fc" id="L507">		responseBody.put(MESSAGE, &quot;OAuth login successful via &quot; + provider);</span>
+		// Finding S5: Do NOT echo session token into response body. The HttpOnly cookie is the session.
+<span class="fc" id="L509">		responseBody.put(&quot;userId&quot;, user.getUserId());</span>
+<span class="pc bpc" id="L510" title="1 of 2 branches missed.">		responseBody.put(&quot;userName&quot;, user.getDisplayName() != null ? user.getDisplayName() : user.getUserId());</span>
+<span class="pc bpc" id="L511" title="1 of 2 branches missed.">		responseBody.put(&quot;name&quot;, user.getDisplayName() != null ? user.getDisplayName() : user.getUserId());</span>
+<span class="fc" id="L512">		responseBody.put(FIELD_EMAIL, user.getEmail());</span>
+<span class="fc" id="L513">		responseBody.put(&quot;status&quot;, user.getStatus());</span>
+<span class="fc bfc" id="L514" title="All 2 branches covered.">		responseBody.put(&quot;roles&quot;, userRole != null ? List.of(userRole.split(&quot;,&quot;)) : List.of());</span>
+
+<span class="fc" id="L516">		return ResponseEntity.ok()</span>
+				// Finding S5: Do NOT set Authorization header in response. The HttpOnly cookie is the session.
+<span class="fc" id="L518">				.header(HttpHeaders.SET_COOKIE, accessCookie.toString())</span>
+<span class="fc" id="L519">				.header(HttpHeaders.SET_COOKIE, authCookie.toString())</span>
+<span class="fc" id="L520">				.body(responseBody);</span>
+	}
+
+	private ResponseCookie createAuthCookie(String name, String value) {
+<span class="fc" id="L524">		return ResponseCookie.from(name, value)</span>
+<span class="fc" id="L525">				.httpOnly(true)</span>
+<span class="fc" id="L526">				.secure(cookieSecure)</span>
+<span class="fc" id="L527">				.path(&quot;/&quot;)</span>
+<span class="fc" id="L528">				.sameSite(&quot;Strict&quot;)</span>
+<span class="fc" id="L529">				.maxAge(Duration.ofMinutes(APIConstants.ACCESS_TOKEN_EXPIRY_IN_MINUTES))</span>
+<span class="fc" id="L530">				.build();</span>
+	}
+
+<span class="fc" id="L533">	private record OAuthProfile(String subject, String username, String email) {}</span>
+
+	private static class OAuthAuthenticationException extends Exception {
+		private final HttpStatus status;
+
+		OAuthAuthenticationException(HttpStatus status, String message) {
+<span class="fc" id="L539">			super(message);</span>
+<span class="fc" id="L540">			this.status = status;</span>
+<span class="fc" id="L541">		}</span>
+
+		HttpStatus getStatus() {
+<span class="fc" id="L544">			return status;</span>
+		}
+	}
+
+	private OAuthProfile exchangeCodeWithProvider(AuthProviderConfigEntity config, String code, String clientRedirectUri) throws IOException, InterruptedException {
+<span class="nc bnc" id="L549" title="All 4 branches missed.">		if (config.getTokenUrl() == null || config.getTokenUrl().isBlank()) {</span>
+<span class="nc" id="L550">			throw new IllegalStateException(&quot;Token URL is not configured for provider: &quot; + config.getProviderId());</span>
+		}
+<span class="nc bnc" id="L552" title="All 4 branches missed.">		if (config.getClientId() == null || config.getClientId().isBlank()) {</span>
+<span class="nc" id="L553">			throw new IllegalStateException(&quot;Client ID is not configured for provider: &quot; + config.getProviderId());</span>
+		}
+
+<span class="nc" id="L556">		HttpClient httpClient = HttpClient.newBuilder()</span>
+<span class="nc" id="L557">				.connectTimeout(Duration.ofSeconds(10))</span>
+<span class="nc" id="L558">				.build();</span>
+
+<span class="nc" id="L560">		String accessToken = requestAccessToken(config, code, clientRedirectUri, httpClient);</span>
+<span class="nc" id="L561">		return fetchUserProfile(config, accessToken, httpClient);</span>
+	}
+
+	private String resolveRedirectUri(AuthProviderConfigEntity config, String clientRedirectUri) {
+<span class="nc bnc" id="L565" title="All 4 branches missed.">		if (clientRedirectUri != null &amp;&amp; !clientRedirectUri.isBlank()) {</span>
+<span class="nc" id="L566">			return clientRedirectUri;</span>
+		}
+<span class="nc bnc" id="L568" title="All 2 branches missed.">		return config.getRedirectUri() != null ? config.getRedirectUri() : &quot;&quot;;</span>
+	}
+
+	private String buildTokenRequestBody(AuthProviderConfigEntity config, String code, String clientRedirectUri) {
+<span class="nc" id="L572">		String redirectUri = resolveRedirectUri(config, clientRedirectUri);</span>
+
+<span class="nc" id="L574">		StringBuilder form = new StringBuilder();</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">		if (!PROVIDER_GITHUB.equalsIgnoreCase(config.getProviderId())) {</span>
+<span class="nc" id="L576">			form.append(&quot;grant_type=authorization_code&amp;&quot;);</span>
+		}
+<span class="nc" id="L578">		form.append(&quot;code=&quot;).append(URLEncoder.encode(code, StandardCharsets.UTF_8));</span>
+<span class="nc" id="L579">		form.append(&quot;&amp;client_id=&quot;).append(URLEncoder.encode(config.getClientId(), StandardCharsets.UTF_8));</span>
+<span class="nc bnc" id="L580" title="All 4 branches missed.">		if (config.getClientSecret() != null &amp;&amp; !config.getClientSecret().isBlank()) {</span>
+<span class="nc" id="L581">			form.append(&quot;&amp;client_secret=&quot;).append(URLEncoder.encode(config.getClientSecret(), StandardCharsets.UTF_8));</span>
+		}
+<span class="nc bnc" id="L583" title="All 2 branches missed.">		if (!redirectUri.isBlank()) {</span>
+<span class="nc" id="L584">			form.append(&quot;&amp;redirect_uri=&quot;).append(URLEncoder.encode(redirectUri, StandardCharsets.UTF_8));</span>
+		}
+<span class="nc" id="L586">		return form.toString();</span>
+	}
+
+	private String extractAccessToken(JsonNode tokenJson, String providerId, String responseBody) {
+<span class="nc bnc" id="L590" title="All 2 branches missed.">		String accessToken = tokenJson.hasNonNull(&quot;access_token&quot;) ? tokenJson.get(&quot;access_token&quot;).asText() : null;</span>
+<span class="nc bnc" id="L591" title="All 4 branches missed.">		if (accessToken != null &amp;&amp; !accessToken.isBlank()) {</span>
+<span class="nc" id="L592">			return accessToken;</span>
+		}
+<span class="nc bnc" id="L594" title="All 2 branches missed.">		String err = tokenJson.hasNonNull(&quot;error&quot;) ? tokenJson.get(&quot;error&quot;).asText() : null;</span>
+<span class="nc bnc" id="L595" title="All 2 branches missed.">		String desc = tokenJson.hasNonNull(&quot;error_description&quot;) ? tokenJson.get(&quot;error_description&quot;).asText() : null;</span>
+<span class="nc bnc" id="L596" title="All 2 branches missed.">		if (err != null) {</span>
+<span class="nc bnc" id="L597" title="All 2 branches missed.">			throw new IllegalStateException(&quot;Identity Provider error [&quot; + err + &quot;]: &quot; + (desc != null ? desc : &quot;&quot;));</span>
+		}
+<span class="nc" id="L599">		throw new IllegalStateException(&quot;No access_token returned by &quot; + providerId + &quot;: &quot; + responseBody);</span>
+	}
+
+	private String requestAccessToken(AuthProviderConfigEntity config, String code, String clientRedirectUri, HttpClient httpClient) throws IOException, InterruptedException {
+<span class="nc" id="L603">		String formBody = buildTokenRequestBody(config, code, clientRedirectUri);</span>
+
+<span class="nc" id="L605">		HttpRequest tokenRequest = HttpRequest.newBuilder()</span>
+<span class="nc" id="L606">				.uri(URI.create(config.getTokenUrl()))</span>
+<span class="nc" id="L607">				.timeout(Duration.ofSeconds(10))</span>
+<span class="nc" id="L608">				.header(&quot;Content-Type&quot;, &quot;application/x-www-form-urlencoded&quot;)</span>
+<span class="nc" id="L609">				.header(&quot;Accept&quot;, &quot;application/json&quot;)</span>
+<span class="nc" id="L610">				.POST(HttpRequest.BodyPublishers.ofString(formBody))</span>
+<span class="nc" id="L611">				.build();</span>
+
+<span class="nc" id="L613">		HttpResponse&lt;String&gt; tokenResponse = httpClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());</span>
+<span class="nc bnc" id="L614" title="All 4 branches missed.">		if (tokenResponse.statusCode() &lt; 200 || tokenResponse.statusCode() &gt;= 300) {</span>
+<span class="nc" id="L615">			throw new IllegalStateException(&quot;Token exchange returned status &quot; + tokenResponse.statusCode() + &quot;: &quot; + tokenResponse.body());</span>
+		}
+
+<span class="nc" id="L618">		JsonNode tokenJson = objectMapper.readTree(tokenResponse.body());</span>
+<span class="nc" id="L619">		return extractAccessToken(tokenJson, config.getProviderId(), tokenResponse.body());</span>
+	}
+
+	private OAuthProfile fetchUserProfile(AuthProviderConfigEntity config, String accessToken, HttpClient httpClient) throws IOException, InterruptedException {
+<span class="nc" id="L623">		String userInfoUrl = config.getUserInfoUrl();</span>
+<span class="nc bnc" id="L624" title="All 4 branches missed.">		if (userInfoUrl == null || userInfoUrl.isBlank()) {</span>
+<span class="nc" id="L625">			throw new IllegalStateException(&quot;User info URL is not configured for provider: &quot; + config.getProviderId());</span>
+		}
+
+<span class="nc" id="L628">		HttpRequest userRequest = HttpRequest.newBuilder()</span>
+<span class="nc" id="L629">				.uri(URI.create(userInfoUrl))</span>
+<span class="nc" id="L630">				.timeout(Duration.ofSeconds(10))</span>
+<span class="nc" id="L631">				.header(&quot;Authorization&quot;, &quot;Bearer &quot; + accessToken)</span>
+<span class="nc" id="L632">				.header(&quot;Accept&quot;, &quot;application/json&quot;)</span>
+<span class="nc" id="L633">				.header(&quot;User-Agent&quot;, &quot;MARS3-Platform&quot;)</span>
+<span class="nc" id="L634">				.GET()</span>
+<span class="nc" id="L635">				.build();</span>
+
+<span class="nc" id="L637">		HttpResponse&lt;String&gt; userResponse = httpClient.send(userRequest, HttpResponse.BodyHandlers.ofString());</span>
+<span class="nc bnc" id="L638" title="All 4 branches missed.">		if (userResponse.statusCode() &lt; 200 || userResponse.statusCode() &gt;= 300) {</span>
+<span class="nc" id="L639">			throw new IllegalStateException(&quot;User info endpoint returned status &quot; + userResponse.statusCode() + &quot;: &quot; + userResponse.body());</span>
+		}
+
+<span class="nc" id="L642">		JsonNode userNode = objectMapper.readTree(userResponse.body());</span>
+<span class="nc" id="L643">		String subject = null;</span>
+<span class="nc bnc" id="L644" title="All 2 branches missed.">		if (userNode.hasNonNull(&quot;id&quot;)) {</span>
+<span class="nc" id="L645">			subject = userNode.get(&quot;id&quot;).asText();</span>
+<span class="nc bnc" id="L646" title="All 2 branches missed.">		} else if (userNode.hasNonNull(&quot;sub&quot;)) {</span>
+<span class="nc" id="L647">			subject = userNode.get(&quot;sub&quot;).asText();</span>
+		}
+
+<span class="nc bnc" id="L650" title="All 4 branches missed.">		if (subject == null || subject.isBlank()) {</span>
+<span class="nc" id="L651">			throw new IllegalStateException(&quot;Identity Provider userinfo response did not return a valid subject/id claim&quot;);</span>
+		}
+
+<span class="nc" id="L654">		String username = null;</span>
+<span class="nc bnc" id="L655" title="All 2 branches missed.">		if (userNode.hasNonNull(&quot;login&quot;)) {</span>
+<span class="nc" id="L656">			username = userNode.get(&quot;login&quot;).asText();</span>
+<span class="nc bnc" id="L657" title="All 2 branches missed.">		} else if (userNode.hasNonNull(&quot;preferred_username&quot;)) {</span>
+<span class="nc" id="L658">			username = userNode.get(&quot;preferred_username&quot;).asText();</span>
+		}
+		// Finding T1: Do not fallback to user display name; display name can be chosen/forged!
+
+<span class="nc bnc" id="L662" title="All 2 branches missed.">		String email = userNode.hasNonNull(FIELD_EMAIL) ? userNode.get(FIELD_EMAIL).asText() : null;</span>
+
+<span class="nc bnc" id="L664" title="All 2 branches missed.">		return new OAuthProfile(subject, username != null ? username : subject, email);</span>
+	}
+
+	private String resolveUserRole(UsersEntityV2 user) {
+<span class="pc bpc" id="L668" title="1 of 2 branches missed.">		if (user == null) return null;</span>
+<span class="fc" id="L669">		List&lt;UserRoleEntityV2&gt; userRoles = user.getUserRoles();</span>
+<span class="pc bpc" id="L670" title="5 of 8 branches missed.">		if ((userRoles == null || userRoles.isEmpty()) &amp;&amp; user.getSerialNumber() != null &amp;&amp; userRoleRepository != null) {</span>
+<span class="fc" id="L671">			userRoles = userRoleRepository.findBySerialNumber(user.getSerialNumber());</span>
+		}
+<span class="pc bpc" id="L673" title="1 of 4 branches missed.">		if (userRoles == null || userRoles.isEmpty()) return null;</span>
+<span class="fc" id="L674">		return userRoles.stream()</span>
+<span class="fc" id="L675">				.map(UserRoleEntityV2::getRoleCode)</span>
+<span class="pc bpc" id="L676" title="2 of 4 branches missed.">				.filter(r -&gt; r != null &amp;&amp; !r.isBlank())</span>
+<span class="fc" id="L677">				.distinct()</span>
+<span class="fc" id="L678">				.collect(Collectors.joining(&quot;,&quot;));</span>
+	}
+
+	private void recordLoginAttempt(String userId, Integer serialNo, char success, String failureReason, HttpServletRequest req) {
+<span class="pc bpc" id="L682" title="1 of 2 branches missed.">		if (loginAttemptRepository == null) return;</span>
+		try {
+<span class="fc" id="L684">			LoginAttemptEntity attempt = new LoginAttemptEntity();</span>
+<span class="pc bpc" id="L685" title="1 of 2 branches missed.">			attempt.setUserId(userId != null ? userId : &quot;UNKNOWN&quot;);</span>
+<span class="fc" id="L686">			attempt.setUserSerialNumber(serialNo);</span>
+<span class="fc" id="L687">			attempt.setSucceeded(success);</span>
+<span class="fc" id="L688">			attempt.setFailureReason(failureReason);</span>
+<span class="pc bpc" id="L689" title="1 of 2 branches missed.">			if (req != null) {</span>
+<span class="fc" id="L690">				attempt.setSourceIp(req.getRemoteAddr());</span>
+<span class="fc" id="L691">				attempt.setUserAgent(req.getHeader(&quot;User-Agent&quot;));</span>
+<span class="pc bpc" id="L692" title="1 of 2 branches missed.">				if (req.getSession(false) != null) {</span>
+<span class="nc" id="L693">					attempt.setSessionId(req.getSession(false).getId());</span>
+				}
+			}
+<span class="fc" id="L696">			loginAttemptRepository.save(attempt);</span>
+<span class="nc" id="L697">		} catch (Exception ex) {</span>
+<span class="nc" id="L698">			log.warn(&quot;Failed to record OAuth login attempt: {}&quot;, ex.getMessage());</span>
+<span class="fc" id="L699">		}</span>
+<span class="fc" id="L700">	}</span>
+
+	private UsersEntityV2 findUserOrThrow(String userId) {
+<span class="fc bfc" id="L703" title="All 4 branches covered.">		if (userId == null || userId.isBlank()) {</span>
+<span class="fc" id="L704">			throw new IllegalArgumentException(&quot;User ID must not be blank&quot;);</span>
+		}
+<span class="fc" id="L706">		UsersEntityV2 user = usersRepository.findByUserId(userId.trim());</span>
+<span class="fc bfc" id="L707" title="All 2 branches covered.">		if (user == null) {</span>
+<span class="fc" id="L708">			throw new ResourceNotFoundException(&quot;MARS_USER&quot;, &quot;userId&quot;, &quot;User not found with ID: &quot; + userId);</span>
+		}
+<span class="fc" id="L710">		return user;</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

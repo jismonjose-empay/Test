@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserPermissionOverrideServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">UserPermissionOverrideServiceImpl.java</span></div><h1>UserPermissionOverrideServiceImpl.java</h1><pre class="source lang-java linenums">
+package com.empay.user_management.serviceimpl;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.empay.user_management.dto.UserPermissionOverridePageResponse;
+import com.empay.user_management.dto.UserPermissionOverrideRequest;
+import com.empay.user_management.dto.UserPermissionOverrideResponse;
+import com.empay.user_management.entities.UserPermissionOverrideEntity;
+import com.empay.user_management.exceptions.ResourceAlreadyExistsException;
+import com.empay.user_management.exceptions.ResourceNotFoundException;
+import com.empay.user_management.repository.UsersRepositoryV2;
+import com.empay.user_management.repository.PermissionRepository;
+import com.empay.user_management.repository.UserPermissionOverrideRepository;
+import com.empay.user_management.service.UserPermissionOverrideService;
+
+import jakarta.persistence.criteria.Predicate;
+
+import java.time.ZoneOffset;
+
+import com.empay.user_management.entities.UserPermissionOverrideHistoryEntity;
+import com.empay.user_management.repository.UserPermissionOverrideHistoryRepository;
+
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class UserPermissionOverrideServiceImpl implements UserPermissionOverrideService {
+
+	private static final String OVERRIDE_ID = &quot;overrideId&quot;;
+
+	private final UserPermissionOverrideRepository overrideRepository;
+	private final UsersRepositoryV2 usersRepositoryV2;
+	private final PermissionRepository permissionRepository;
+	private final UserPermissionOverrideHistoryRepository historyRepository;
+
+	@Override
+	public UserPermissionOverrideResponse createOverride(UserPermissionOverrideRequest request) {
+
+<span class="fc bfc" id="L53" title="All 2 branches covered.">		if (request == null) {</span>
+<span class="fc" id="L54">			throw new IllegalArgumentException(&quot;Request body is required&quot;);</span>
+		}
+
+<span class="fc" id="L57">		Long userSerialNo = request.getUserSerialNo();</span>
+
+<span class="pc bpc" id="L59" title="1 of 4 branches missed.">		if (userSerialNo == null || userSerialNo &lt;= 0) {</span>
+<span class="fc" id="L60">			throw new IllegalArgumentException(&quot;A valid user serial number is required&quot;);</span>
+		}
+
+<span class="fc" id="L63">		String permissionCode = normalizePermissionCode(request.getPermissionCode());</span>
+
+<span class="fc" id="L65">		String effect = normalizeEffect(request.getEffect());</span>
+
+<span class="fc" id="L67">		String justification = request.getJustification().trim();</span>
+
+<span class="fc" id="L69">		String grantedBy = request.getGrantedBy().trim();</span>
+
+<span class="fc" id="L71">		LocalDateTime expiresAt = request.getExpiresAt();</span>
+
+<span class="fc bfc" id="L73" title="All 2 branches covered.">		if (justification.isEmpty()) {</span>
+<span class="fc" id="L74">			throw new IllegalArgumentException(&quot;Justification is required&quot;);</span>
+		}
+
+<span class="fc bfc" id="L77" title="All 2 branches covered.">		if (justification.length() &gt; 400) {</span>
+<span class="fc" id="L78">			throw new IllegalArgumentException(&quot;Justification cannot exceed 400 characters&quot;);</span>
+		}
+
+<span class="pc bpc" id="L81" title="1 of 4 branches missed.">		if (grantedBy.isEmpty() || grantedBy.length() &gt; 50) {</span>
+<span class="fc" id="L82">			throw new IllegalArgumentException(&quot;Granted by must contain 1 to 50 characters&quot;);</span>
+		}
+
+<span class="fc bfc" id="L85" title="All 4 branches covered.">		if (expiresAt != null &amp;&amp; !expiresAt.isAfter(LocalDateTime.now(ZoneOffset.UTC))) {</span>
+<span class="fc" id="L86">			throw new IllegalArgumentException(&quot;Expiry date must be in the future&quot;);</span>
+		}
+
+<span class="pc bpc" id="L89" title="1 of 4 branches missed.">		if (userSerialNo &gt; Integer.MAX_VALUE || !usersRepositoryV2.existsById(userSerialNo.intValue())) {</span>
+
+<span class="fc" id="L91">			throw new ResourceNotFoundException(&quot;User&quot;, &quot;userSerialNo&quot;,</span>
+					&quot;User not found with serial number: &quot; + userSerialNo);
+		}
+
+<span class="fc bfc" id="L95" title="All 2 branches covered.">		if (!permissionRepository.existsById(permissionCode)) {</span>
+<span class="fc" id="L96">			throw new ResourceNotFoundException(&quot;Permission&quot;, &quot;permissionCode&quot;,</span>
+					&quot;Permission not found: &quot; + permissionCode);
+		}
+
+<span class="fc bfc" id="L100" title="All 2 branches covered.">		if (overrideRepository.existsByUserSerialNoAndPermissionCode(userSerialNo, permissionCode)) {</span>
+<span class="fc" id="L101">			throw new ResourceAlreadyExistsException(&quot;UserPermissionOverride&quot;, &quot;permissionCode&quot;,</span>
+					&quot;An override already exists for this user and permission&quot;);
+		}
+
+<span class="fc" id="L105">		UserPermissionOverrideEntity entity = new UserPermissionOverrideEntity();</span>
+
+<span class="fc" id="L107">		entity.setUserSerialNo(userSerialNo);</span>
+<span class="fc" id="L108">		entity.setPermissionCode(permissionCode);</span>
+<span class="fc" id="L109">		entity.setEffect(effect);</span>
+<span class="fc" id="L110">		entity.setJustification(justification);</span>
+<span class="fc" id="L111">		entity.setGrantedBy(grantedBy);</span>
+<span class="fc" id="L112">		entity.setExpiresAt(expiresAt);</span>
+
+		try {
+<span class="fc" id="L115">			UserPermissionOverrideEntity saved = overrideRepository.saveAndFlush(entity);</span>
+<span class="fc" id="L116">			saveHistory(saved, &quot;CREATED&quot;, request.getGrantedBy());</span>
+
+<span class="fc" id="L118">			return toResponse(saved);</span>
+
+<span class="fc" id="L120">		} catch (DataIntegrityViolationException ex) {</span>
+<span class="fc" id="L121">			throw new ResourceAlreadyExistsException(&quot;UserPermissionOverride&quot;, &quot;permissionCode&quot;,</span>
+					&quot;Unable to create the override. Check for an existing &quot;
+							+ &quot;user-permission override or a database constraint violation.&quot;);
+		}
+
+	}
+
+	@Override
+	public void deleteOverride(Long overrideId, String changedBy) {
+
+<span class="pc bpc" id="L131" title="1 of 4 branches missed.">		if (overrideId == null || overrideId &lt;= 0) {</span>
+<span class="fc" id="L132">			throw new IllegalArgumentException(&quot;Override ID must be a positive number&quot;);</span>
+		}
+
+<span class="pc bpc" id="L135" title="1 of 4 branches missed.">		if (changedBy == null || changedBy.isBlank()) {</span>
+<span class="fc" id="L136">			throw new IllegalArgumentException(&quot;Changed by is required&quot;);</span>
+		}
+
+<span class="fc" id="L139">		UserPermissionOverrideEntity entity = overrideRepository.findById(overrideId)</span>
+<span class="fc" id="L140">				.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;UserPermissionOverride&quot;, OVERRIDE_ID,</span>
+						&quot;Permission override not found with ID: &quot; + overrideId));
+
+<span class="fc" id="L143">		saveHistory(entity, &quot;DELETED&quot;, changedBy.trim());</span>
+
+<span class="fc" id="L145">		overrideRepository.delete(entity);</span>
+<span class="fc" id="L146">		overrideRepository.flush();</span>
+<span class="fc" id="L147">	}</span>
+
+	@Override
+	@Transactional(readOnly = true)
+	public UserPermissionOverridePageResponse getAllOverrides(
+	        String search,
+	        String sortBy,
+	        String sortDir,
+	        int page,
+	        int pageSize) {
+
+<span class="fc" id="L158">	    return queryOverrides(search, sortBy, sortDir, page, pageSize);</span>
+	}
+	private UserPermissionOverridePageResponse queryOverrides(String search, String sortBy, String sortDir, int page,
+			int pageSize) {
+
+<span class="fc" id="L163">		int pageNumber = Math.max(page - 1, 0);</span>
+<span class="fc bfc" id="L164" title="All 2 branches covered.">		int size = (pageSize &lt;= 0) ? 20 : Math.min(pageSize, 100);</span>
+
+<span class="fc" id="L166">		List&lt;String&gt; allowedSortFields = List.of(OVERRIDE_ID, &quot;userSerialNo&quot;, &quot;permissionCode&quot;, &quot;effect&quot;, &quot;grantedBy&quot;,</span>
+				&quot;grantedAt&quot;, &quot;expiresAt&quot;);
+
+<span class="pc bpc" id="L169" title="1 of 4 branches missed.">		String sortField = (sortBy != null &amp;&amp; allowedSortFields.contains(sortBy)) ? sortBy : &quot;grantedAt&quot;;</span>
+
+<span class="fc bfc" id="L171" title="All 2 branches covered.">		Sort.Direction direction = &quot;ASC&quot;.equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;</span>
+
+<span class="fc" id="L173">		Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(direction, sortField));</span>
+
+<span class="fc" id="L175">		Specification&lt;UserPermissionOverrideEntity&gt; spec = (root, query, cb) -&gt; {</span>
+<span class="fc" id="L176">			List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();</span>
+
+<span class="pc bpc" id="L178" title="2 of 4 branches missed.">			if (search != null &amp;&amp; !search.isBlank()) {</span>
+<span class="fc" id="L179">				String pattern = &quot;%&quot; + search.trim().toLowerCase(Locale.ROOT) + &quot;%&quot;;</span>
+
+<span class="fc" id="L181">				predicates.add(cb.or(cb.like(cb.lower(root.get(&quot;permissionCode&quot;)), pattern),</span>
+<span class="fc" id="L182">						cb.like(cb.lower(root.get(&quot;effect&quot;)), pattern),</span>
+<span class="fc" id="L183">						cb.like(cb.lower(root.get(&quot;justification&quot;)), pattern),</span>
+<span class="fc" id="L184">						cb.like(cb.lower(root.get(&quot;grantedBy&quot;)), pattern)));</span>
+			}
+
+<span class="fc" id="L187">			return cb.and(predicates.toArray(new Predicate[0]));</span>
+		};
+
+<span class="fc" id="L190">		Page&lt;UserPermissionOverrideEntity&gt; resultPage = overrideRepository.findAll(spec, pageable);</span>
+
+<span class="fc" id="L192">		List&lt;UserPermissionOverrideResponse&gt; items = resultPage.getContent().stream().map(this::toResponse).toList();</span>
+
+<span class="fc" id="L194">		return new UserPermissionOverridePageResponse(items, resultPage.getTotalElements(), pageNumber + 1, size,</span>
+<span class="fc" id="L195">				resultPage.getTotalPages(), resultPage.hasNext());</span>
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public UserPermissionOverrideResponse getOverrideById(Long id) {
+
+<span class="fc bfc" id="L202" title="All 4 branches covered.">		if (id == null || id &lt;= 0) {</span>
+<span class="fc" id="L203">			throw new IllegalArgumentException(&quot;A valid override ID is required&quot;);</span>
+		}
+
+<span class="fc" id="L206">		UserPermissionOverrideEntity entity = overrideRepository.findById(id)</span>
+<span class="fc" id="L207">				.orElseThrow(() -&gt; new ResourceNotFoundException(&quot;UserPermissionOverride&quot;, OVERRIDE_ID,</span>
+						&quot;Override not found with ID: &quot; + id));
+
+<span class="fc" id="L210">		return toResponse(entity);</span>
+	}
+
+	private String normalizePermissionCode(String permissionCode) {
+
+<span class="pc bpc" id="L215" title="2 of 4 branches missed.">		if (permissionCode == null || permissionCode.isBlank()) {</span>
+<span class="nc" id="L216">			throw new IllegalArgumentException(&quot;Permission code is required&quot;);</span>
+		}
+
+<span class="fc" id="L219">		String normalized = permissionCode.trim().toUpperCase(Locale.ROOT);</span>
+
+<span class="pc bpc" id="L221" title="1 of 2 branches missed.">		if (normalized.length() &gt; 60) {</span>
+<span class="nc" id="L222">			throw new IllegalArgumentException(&quot;Permission code cannot exceed 60 characters&quot;);</span>
+		}
+
+<span class="fc" id="L225">		return normalized;</span>
+	}
+
+	private String normalizeEffect(String effect) {
+
+<span class="pc bpc" id="L230" title="2 of 4 branches missed.">		if (effect == null || effect.isBlank()) {</span>
+<span class="nc" id="L231">			throw new IllegalArgumentException(&quot;Effect is required&quot;);</span>
+		}
+
+<span class="fc" id="L234">		String normalized = effect.trim().toUpperCase(Locale.ROOT);</span>
+
+<span class="pc bpc" id="L236" title="1 of 4 branches missed.">		if (!normalized.equals(&quot;GRANT&quot;) &amp;&amp; !normalized.equals(&quot;DENY&quot;)) {</span>
+<span class="fc" id="L237">			throw new IllegalArgumentException(&quot;Effect must be either GRANT or DENY&quot;);</span>
+		}
+
+<span class="fc" id="L240">		return normalized;</span>
+	}
+
+	private UserPermissionOverrideResponse toResponse(UserPermissionOverrideEntity entity) {
+
+<span class="fc" id="L245">		return new UserPermissionOverrideResponse(entity.getOverrideId(), entity.getUserSerialNo(),</span>
+<span class="fc" id="L246">				entity.getPermissionCode(), entity.getEffect(), entity.getJustification(), entity.getGrantedBy(),</span>
+<span class="fc" id="L247">				entity.getGrantedAt(), entity.getExpiresAt());</span>
+	}
+
+	private void saveHistory(UserPermissionOverrideEntity override, String actionTaken, String changedBy) {
+
+<span class="fc" id="L252">		UserPermissionOverrideHistoryEntity history = UserPermissionOverrideHistoryEntity.builder()</span>
+<span class="fc" id="L253">				.overrideId(override.getOverrideId()).userSerialNo(override.getUserSerialNo())</span>
+<span class="fc" id="L254">				.permissionCode(override.getPermissionCode()).effect(override.getEffect())</span>
+<span class="fc" id="L255">				.justification(override.getJustification()).actionTaken(actionTaken).changedBy(changedBy)</span>
+<span class="fc" id="L256">				.changedAt(LocalDateTime.now(ZoneOffset.UTC)).expiresAt(override.getExpiresAt()).build();</span>
+
+<span class="fc" id="L258">		historyRepository.save(history);</span>
+<span class="fc" id="L259">	}</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

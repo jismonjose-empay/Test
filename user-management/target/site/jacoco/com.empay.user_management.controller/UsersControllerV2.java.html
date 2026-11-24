@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UsersControllerV2.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.controller</a> &gt; <span class="el_source">UsersControllerV2.java</span></div><h1>UsersControllerV2.java</h1><pre class="source lang-java linenums">package com.empay.user_management.controller;
+
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.empay.user_management.service.UsersServiceV2;
+import com.empay.user_management.valueobjects.UsersVOV2;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping(value = &quot;/api/users/v2&quot;)
+@RequiredArgsConstructor
+public class UsersControllerV2 {
+
+	private final UsersServiceV2 usersService;
+
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.VIEW')&quot;)
+	@GetMapping(&quot;/get-users&quot;)
+	public ResponseEntity&lt;Object&gt; getUser(@RequestParam(required = false) String search,
+			@RequestParam(value = &quot;status&quot;, required = false) String status,
+			@RequestParam(value = &quot;roleCode&quot;, required = false) String roleCode,
+			@RequestParam(defaultValue = &quot;1&quot;) int page, @RequestParam(defaultValue = &quot;20&quot;) int pageSize) {
+<span class="fc" id="L37">		return ResponseEntity.ok(usersService.getUsers(search, status, roleCode, page, pageSize));</span>
+	}
+
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.VIEW')&quot;)
+	@GetMapping(value = &quot;/get-users/{userId}&quot;)
+	public ResponseEntity&lt;Object&gt; getUserById(@PathVariable(&quot;userId&quot;) String userId) {
+<span class="fc" id="L43">		return usersService.getUser(userId);</span>
+	}
+
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.CREATE')&quot;)
+	@PostMapping(&quot;add-user&quot;)
+	public ResponseEntity&lt;Object&gt; addUser(@RequestBody @Valid UsersVOV2 usersVO) {
+<span class="fc" id="L49">		return usersService.addUser(usersVO);</span>
+	}
+
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.EDIT')&quot;)
+	@PutMapping(&quot;add-user/{userId}&quot;)
+	public ResponseEntity&lt;Object&gt; updateUser(@RequestBody @Valid UsersVOV2 usersVO,
+			@PathVariable(&quot;userId&quot;) String userId) {
+<span class="fc" id="L56">		return usersService.updateUser(usersVO, userId);</span>
+	}
+
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.SUSPEND')&quot;)
+	@PutMapping(&quot;{userId}/{status}/changeStatus&quot;)
+	public ResponseEntity&lt;Object&gt; changeStatus(@PathVariable(&quot;userId&quot;) String userId,
+											   @PathVariable(&quot;status&quot;) String status, @RequestBody String request) {
+
+<span class="fc" id="L64">		String decodedUserId = URLDecoder.decode(userId, StandardCharsets.UTF_8);</span>
+<span class="fc" id="L65">		return usersService.suspendUser(decodedUserId, status, request);</span>
+	}
+	
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.VIEW')&quot;)
+	@GetMapping(&quot;stats&quot;)
+	public ResponseEntity&lt;Object&gt; usersStats() {
+<span class="fc" id="L71">		return ResponseEntity.ok(usersService.getUsersStats());</span>
+	}
+	
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_USERS.DELETE')&quot;)
+	@DeleteMapping(&quot;delete/{userId}&quot;)
+	public ResponseEntity&lt;Void&gt; deleteUser(@PathVariable(&quot;userId&quot;) String userId) {
+<span class="fc" id="L77">		return usersService.deleteUser(userId);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

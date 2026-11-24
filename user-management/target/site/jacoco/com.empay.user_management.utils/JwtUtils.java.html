@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JwtUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.utils</a> &gt; <span class="el_source">JwtUtils.java</span></div><h1>JwtUtils.java</h1><pre class="source lang-java linenums">package com.empay.user_management.utils;
+
+import java.security.Key;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+
+@Service
+<span class="fc" id="L24">public class JwtUtils {</span>
+
+<span class="fc" id="L26">	private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);</span>
+
+<span class="fc" id="L28">	public static final long ACCESS_TOKEN_EXPIRATION_TIME = Duration</span>
+<span class="fc" id="L29">			.ofMinutes(APIConstants.ACCESS_TOKEN_EXPIRY_IN_MINUTES).toMillis();</span>
+
+	@Value(&quot;${jwt.secret}&quot;)
+	private String secret;
+
+	private Key getSigningKey() {
+<span class="fc" id="L35">		return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));</span>
+	}
+
+	public String generateToken(String userId, Integer userSerialNumber, String userRole) {
+		try {
+<span class="fc" id="L40">			Date expirationDate = Date.from(Instant.now().plusMillis(ACCESS_TOKEN_EXPIRATION_TIME));</span>
+<span class="fc" id="L41">			var builder = Jwts.builder()</span>
+<span class="fc" id="L42">					.setSubject(userId)</span>
+<span class="fc" id="L43">					.claim(APIConstants.USER_ID, userId)</span>
+<span class="fc" id="L44">					.setIssuedAt(new Date())</span>
+<span class="fc" id="L45">					.setExpiration(expirationDate);</span>
+<span class="fc bfc" id="L46" title="All 2 branches covered.">			if (userSerialNumber != null) {</span>
+<span class="fc" id="L47">				builder.claim(APIConstants.USER_SER_NUMBER, userSerialNumber);</span>
+			}
+<span class="pc bpc" id="L49" title="1 of 4 branches missed.">			if (userRole != null &amp;&amp; !userRole.isBlank()) {</span>
+<span class="fc" id="L50">				builder.claim(APIConstants.USER_ROLE, userRole.trim());</span>
+			}
+<span class="fc" id="L52">			return builder.signWith(getSigningKey()).compact();</span>
+<span class="nc" id="L53">		} catch (Exception e) {</span>
+<span class="nc" id="L54">			logger.error(&quot;ERROR : generateToken()&quot;, e);</span>
+<span class="nc" id="L55">			return null;</span>
+		}
+	}
+
+	public String generateToken(String userId, Integer userSerialNumber) {
+<span class="fc" id="L60">		return generateToken(userId, userSerialNumber, null);</span>
+	}
+
+	public String generateToken(String userId) {
+<span class="fc" id="L64">		return generateToken(userId, null, null);</span>
+	}
+
+	public boolean validateToken(String token) {
+<span class="fc bfc" id="L68" title="All 4 branches covered.">		if (token == null || token.isBlank()) {</span>
+<span class="fc" id="L69">			return false;</span>
+		}
+		try {
+<span class="fc" id="L72">			Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);</span>
+<span class="fc" id="L73">			return true;</span>
+<span class="fc" id="L74">		} catch (Exception e) {</span>
+<span class="fc" id="L75">			logger.debug(&quot;Invalid JWT token: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L76">			return false;</span>
+		}
+	}
+
+	public String getUserIdFromToken(String token) {
+<span class="fc bfc" id="L81" title="All 4 branches covered.">		if (token == null || token.isBlank()) {</span>
+<span class="fc" id="L82">			return null;</span>
+		}
+		try {
+<span class="fc" id="L85">			Jws&lt;Claims&gt; jwsClaims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);</span>
+<span class="fc" id="L86">			Claims claims = jwsClaims.getBody();</span>
+<span class="fc" id="L87">			String subject = claims.getSubject();</span>
+<span class="pc bpc" id="L88" title="2 of 4 branches missed.">			if (subject != null &amp;&amp; !subject.isBlank()) {</span>
+<span class="fc" id="L89">				return subject;</span>
+			}
+<span class="nc" id="L91">			return claims.get(APIConstants.USER_ID, String.class);</span>
+<span class="nc" id="L92">		} catch (Exception e) {</span>
+<span class="nc" id="L93">			logger.debug(&quot;Failed to extract userId from token: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L94">			return null;</span>
+		}
+	}
+
+	public Integer getUserSerNumber(HttpServletRequest request) {
+<span class="fc" id="L99">		var token = getAccessTokenFromRequest(request);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">		if (Objects.isNull(token)) {</span>
+<span class="fc" id="L101">			return null;</span>
+		}
+<span class="fc" id="L103">		return extractClaims(token).get(APIConstants.USER_SER_NUMBER, Integer.class);</span>
+	}
+
+	public String getUserId(HttpServletRequest request) {
+<span class="fc" id="L107">		var token = getAccessTokenFromRequest(request);</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">		if (Objects.isNull(token)) {</span>
+<span class="nc" id="L109">			return null;</span>
+		}
+<span class="fc" id="L111">		return getUserIdFromToken(token);</span>
+	}
+
+	public String getUserRoleFromToken(String token) {
+<span class="fc bfc" id="L115" title="All 4 branches covered.">		if (token == null || token.isBlank()) {</span>
+<span class="fc" id="L116">			return null;</span>
+		}
+		try {
+<span class="fc" id="L119">			Claims claims = extractClaims(token);</span>
+<span class="fc" id="L120">			return claims.get(APIConstants.USER_ROLE, String.class);</span>
+<span class="fc" id="L121">		} catch (Exception e) {</span>
+<span class="fc" id="L122">			logger.debug(&quot;Failed to extract userRole from token: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L123">			return null;</span>
+		}
+	}
+
+	public String getUserRole(HttpServletRequest request) {
+<span class="fc" id="L128">		var token = getAccessTokenFromRequest(request);</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">		if (Objects.isNull(token)) {</span>
+<span class="fc" id="L130">			return null;</span>
+		}
+<span class="fc" id="L132">		return getUserRoleFromToken(token);</span>
+	}
+
+	public static String getAccessTokenFromRequest(HttpServletRequest request) {
+<span class="fc bfc" id="L136" title="All 2 branches covered.">		if (request == null) {</span>
+<span class="fc" id="L137">			return null;</span>
+		}
+
+<span class="fc" id="L140">		String token = extractTokenFromAuthHeader(request.getHeader(HttpHeaders.AUTHORIZATION));</span>
+<span class="fc bfc" id="L141" title="All 2 branches covered.">		if (token != null) {</span>
+<span class="fc" id="L142">			return token;</span>
+		}
+
+<span class="fc" id="L145">		String xAuthToken = request.getHeader(&quot;X-Auth-Token&quot;);</span>
+<span class="pc bpc" id="L146" title="1 of 4 branches missed.">		if (xAuthToken != null &amp;&amp; !xAuthToken.isBlank()) {</span>
+<span class="fc" id="L147">			return stripSurroundingQuotes(xAuthToken.trim());</span>
+		}
+
+<span class="fc" id="L150">		return extractTokenFromCookies(request.getCookies());</span>
+	}
+
+	private static String extractTokenFromAuthHeader(String authHeader) {
+<span class="pc bpc" id="L154" title="1 of 4 branches missed.">		if (authHeader == null || authHeader.isBlank()) {</span>
+<span class="fc" id="L155">			return null;</span>
+		}
+<span class="fc" id="L157">		String trimmed = authHeader.trim();</span>
+<span class="fc bfc" id="L158" title="All 2 branches covered.">		if (trimmed.regionMatches(true, 0, &quot;Bearer &quot;, 0, 7)) {</span>
+<span class="fc" id="L159">			return stripSurroundingQuotes(trimmed.substring(7).trim());</span>
+		}
+<span class="fc bfc" id="L161" title="All 2 branches covered.">		if (trimmed.startsWith(&quot;eyJ&quot;)) {</span>
+<span class="fc" id="L162">			return stripSurroundingQuotes(trimmed);</span>
+		}
+<span class="fc" id="L164">		return null;</span>
+	}
+
+	private static String extractTokenFromCookies(Cookie[] cookies) {
+<span class="fc bfc" id="L168" title="All 2 branches covered.">		if (cookies == null) {</span>
+<span class="fc" id="L169">			return null;</span>
+		}
+<span class="pc bpc" id="L171" title="1 of 2 branches missed.">		for (Cookie cookie : cookies) {</span>
+<span class="fc bfc" id="L172" title="All 2 branches covered.">			if (APIConstants.ACCESS_TOKEN_COOKIE.equalsIgnoreCase(cookie.getName())</span>
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">					|| &quot;AUTH_TOKEN&quot;.equalsIgnoreCase(cookie.getName())) {</span>
+<span class="fc" id="L174">				String val = cookie.getValue();</span>
+<span class="pc bpc" id="L175" title="2 of 4 branches missed.">				if (val != null &amp;&amp; !val.isBlank()) {</span>
+<span class="fc" id="L176">					return stripSurroundingQuotes(val.trim());</span>
+				}
+			}
+		}
+<span class="nc" id="L180">		return null;</span>
+	}
+
+	private static String stripSurroundingQuotes(String str) {
+<span class="pc bpc" id="L184" title="2 of 4 branches missed.">		if (str == null || str.isBlank()) {</span>
+<span class="nc" id="L185">			return null;</span>
+		}
+<span class="fc" id="L187">		String s = str.trim();</span>
+<span class="pc bpc" id="L188" title="2 of 6 branches missed.">		if (s.startsWith(&quot;\&quot;&quot;) &amp;&amp; s.endsWith(&quot;\&quot;&quot;) &amp;&amp; s.length() &gt; 1) {</span>
+<span class="fc" id="L189">			s = s.substring(1, s.length() - 1).trim();</span>
+		}
+<span class="pc bpc" id="L191" title="1 of 6 branches missed.">		if (&quot;null&quot;.equalsIgnoreCase(s) || &quot;undefined&quot;.equalsIgnoreCase(s) || s.isBlank()) {</span>
+<span class="fc" id="L192">			return null;</span>
+		}
+<span class="fc" id="L194">		return s;</span>
+	}
+
+	public Claims extractClaims(String token) {
+<span class="fc" id="L198">		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();</span>
+	}
+	
+	public Integer getInstitutionCode(HttpServletRequest request) {
+<span class="fc bfc" id="L202" title="All 2 branches covered.">		if (Objects.isNull(request.getCookies())) {</span>
+<span class="fc" id="L203">			return null;</span>
+		}
+<span class="fc bfc" id="L205" title="All 2 branches covered.">		for (Cookie cookie : request.getCookies()) {</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">			if (APIConstants.INS_CODE.equals(cookie.getName())) {</span>
+				try {
+<span class="fc" id="L208">	                return Integer.parseInt(cookie.getValue());</span>
+<span class="fc" id="L209">	            } catch (NumberFormatException e) {</span>
+<span class="fc" id="L210">	                return null;</span>
+	            }
+			}
+		}
+<span class="fc" id="L214">		return null;</span>
+	}
+	
+	public Integer getGrpSerialNumber(HttpServletRequest request) {
+<span class="fc bfc" id="L218" title="All 2 branches covered.">		if (Objects.isNull(request.getCookies())) {</span>
+<span class="fc" id="L219">			return null;</span>
+		}
+<span class="fc bfc" id="L221" title="All 2 branches covered.">		for (Cookie cookie : request.getCookies()) {</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">			if (APIConstants.GRP_SER_NUMBER.equals(cookie.getName())) {</span>
+				try {
+<span class="fc" id="L224">	                return Integer.parseInt(cookie.getValue());</span>
+<span class="fc" id="L225">	            } catch (NumberFormatException e) {</span>
+<span class="fc" id="L226">	                return null;</span>
+	            }
+			}
+		}
+<span class="fc" id="L230">		return null;</span>
+	}
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

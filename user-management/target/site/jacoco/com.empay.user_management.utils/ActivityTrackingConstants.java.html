@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ActivityTrackingConstants.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.utils</a> &gt; <span class="el_source">ActivityTrackingConstants.java</span></div><h1>ActivityTrackingConstants.java</h1><pre class="source lang-java linenums">package com.empay.user_management.utils;
+
+import java.util.Map;
+
+public class ActivityTrackingConstants {
+
+	private ActivityTrackingConstants() {
+	}
+
+	private static final String LOGIN = &quot;Login&quot;;
+	private static final String USERS = &quot;Users&quot;;
+	private static final String USER_PROFILES = &quot;User Profiles&quot;;
+	private static final String USER_INSTITUTIONS = &quot;User Institutions&quot;;
+	private static final String ACQUIRER_BINS = &quot;Acquirer Bins&quot;;
+	private static final String AGGREGATORS = &quot;Aggregators&quot;;
+	private static final String BANK_NAME = &quot;Bank Name&quot;;
+	private static final String CITIES = &quot;Cities&quot;;
+	private static final String COUNTRIES = &quot;Countries&quot;;
+	private static final String CURRENCIES = &quot;Currencies&quot;;
+	private static final String DISTRIBUTORS = &quot;Distributors&quot;;
+	private static final String IFSC = &quot;IFS Code&quot;;
+	private static final String INSTITUTIONS = &quot;Institutions&quot;;
+	private static final String MCC_SURCHARGE = &quot;MCC Surcharge&quot;;
+	private static final String MERCHANT_CATEGORIES = &quot;Merchant Categories&quot;;
+	private static final String PIN_CODES = &quot;Pin Codes&quot;;
+	private static final String RISK_HOLDS = &quot;Risk Hold&quot;;
+	private static final String REGIONS = &quot;Regions&quot;;
+	private static final String SHARING_PARTNERS = &quot;Sharing Partners&quot;;
+	private static final String STATES = &quot;States&quot;;
+	private static final String TERMINAL_MAKE = &quot;Terminal Make&quot;;
+	private static final String TERMINAL_MODEL = &quot;Terminal Model&quot;;
+	private static final String USER_ACCESS = &quot;User Access Control&quot;;
+	private static final String USER_ACTIVITY_TRACKING = &quot;User Activity Tracking&quot;;
+	private static final String USER_GROUPS = &quot;User Groups&quot;;
+
+<span class="fc" id="L36">	public static final Map&lt;String, String&gt; AUTH_PAGES = Map.ofEntries(</span>
+
+<span class="fc" id="L38">			Map.entry(&quot;/api/auth/login&quot;, LOGIN), Map.entry(&quot;/api/auth/logout&quot;, LOGIN),</span>
+<span class="fc" id="L39">			Map.entry(&quot;/api/auth/change-password&quot;, &quot;Change Password&quot;),</span>
+<span class="fc" id="L40">			Map.entry(&quot;/api/auth/forgot-password&quot;, &quot;Forgot Password&quot;),</span>
+<span class="fc" id="L41">			Map.entry(&quot;/api/auth/reset-password&quot;, &quot;Reset Password&quot;),</span>
+<span class="fc" id="L42">			Map.entry(&quot;/api/auth/get-refresh-token&quot;, LOGIN),</span>
+<span class="fc" id="L43">			Map.entry(&quot;/api/auth/validate&quot;, &quot;Validate&quot;)</span>
+
+	);
+
+	// USER MODULE
+<span class="fc" id="L48">	public static final Map&lt;String, String&gt; USER_PAGES = Map.ofEntries(</span>
+
+<span class="fc" id="L50">			Map.entry(&quot;/api/users/add-user&quot;, USERS),</span>
+<span class="fc" id="L51">			Map.entry(&quot;/api/users/edit-user&quot;, USERS),</span>
+<span class="fc" id="L52">			Map.entry(&quot;/api/users/get-user-data&quot;, USERS),</span>
+<span class="fc" id="L53">			Map.entry(&quot;/api/users/delete-user&quot;, USERS),</span>
+<span class="fc" id="L54">			Map.entry(&quot;/api/users/get-users&quot;, USERS),</span>
+<span class="fc" id="L55">			Map.entry(&quot;/api/users/verify-institution&quot;, &quot;Verify Institution&quot;),</span>
+<span class="fc" id="L56">			Map.entry(&quot;/api/users/select-institution&quot;, &quot;Select Institution&quot;),</span>
+
+<span class="fc" id="L58">			Map.entry(&quot;/api/users/get-all-profiles&quot;, USER_PROFILES),</span>
+<span class="fc" id="L59">			Map.entry(&quot;/api/users/get-profiles&quot;, USER_PROFILES),</span>
+<span class="fc" id="L60">			Map.entry(&quot;/api/users/delete-profile&quot;, USER_PROFILES),</span>
+<span class="fc" id="L61">			Map.entry(&quot;/api/users/get-profile-data&quot;, USER_PROFILES),</span>
+<span class="fc" id="L62">			Map.entry(&quot;/api/users/add-profile&quot;, USER_PROFILES),</span>
+<span class="fc" id="L63">			Map.entry(&quot;/api/users/edit-profile&quot;, USER_PROFILES),</span>
+
+<span class="fc" id="L65">			Map.entry(&quot;/api/users/get-institutions-and-groups&quot;, USER_INSTITUTIONS),</span>
+<span class="fc" id="L66">			Map.entry(&quot;/api/users/get-user-institutions&quot;, USER_INSTITUTIONS),</span>
+<span class="fc" id="L67">			Map.entry(&quot;/api/users/delete-user-institution&quot;, USER_INSTITUTIONS),</span>
+<span class="fc" id="L68">			Map.entry(&quot;/api/users/get-user-institution-data&quot;, USER_INSTITUTIONS),</span>
+<span class="fc" id="L69">			Map.entry(&quot;/api/users/edit-user-institution&quot;, USER_INSTITUTIONS),</span>
+<span class="fc" id="L70">			Map.entry(&quot;/api/users/add-user-institution&quot;, USER_INSTITUTIONS),</span>
+
+<span class="fc" id="L72">			Map.entry(&quot;/api/users/GetUserAccess&quot;, USER_ACCESS),</span>
+<span class="fc" id="L73">			Map.entry(&quot;/api/users/UserAccessControl/Save&quot;, USER_ACCESS),</span>
+			
+<span class="fc" id="L75">			Map.entry(&quot;/api/users/save-user-activity&quot;, USER_ACTIVITY_TRACKING),</span>
+<span class="fc" id="L76">			Map.entry(&quot;/api/users/get-user-activity-list&quot;, USER_ACTIVITY_TRACKING),</span>
+			
+<span class="fc" id="L78">			Map.entry(&quot;/api/users/get-userGroups&quot;, USER_GROUPS),</span>
+<span class="fc" id="L79">			Map.entry(&quot;/api/users/get-group&quot;, USER_GROUPS),</span>
+<span class="fc" id="L80">			Map.entry(&quot;/api/users/save-userGroups&quot;, USER_GROUPS),</span>
+<span class="fc" id="L81">			Map.entry(&quot;/api/users/update-userGroups&quot;, USER_GROUPS),</span>
+<span class="fc" id="L82">			Map.entry(&quot;/api/users/delete-userGroups&quot;, USER_GROUPS),</span>
+<span class="fc" id="L83">			Map.entry(&quot;/api/users/GetUserGroups&quot;, USER_GROUPS),</span>
+<span class="fc" id="L84">			Map.entry(&quot;/api/users/getInstitutions&quot;, USER_GROUPS)</span>
+
+	);
+
+	// PARAMETER MODULE
+<span class="fc" id="L89">	public static final Map&lt;String, String&gt; PARAMETER_PAGES = Map.ofEntries(</span>
+
+<span class="fc" id="L91">			Map.entry(&quot;/api/params/get-acquirerbins&quot;, ACQUIRER_BINS),</span>
+<span class="fc" id="L92">			Map.entry(&quot;/api/params/find-acquirerbin&quot;, ACQUIRER_BINS),</span>
+<span class="fc" id="L93">			Map.entry(&quot;/api/params/save-acquirerbin&quot;, ACQUIRER_BINS),</span>
+<span class="fc" id="L94">			Map.entry(&quot;/api/params/update-acquirerbin&quot;, ACQUIRER_BINS),</span>
+<span class="fc" id="L95">			Map.entry(&quot;/api/params/delete-acquirerbin&quot;, ACQUIRER_BINS),</span>
+
+<span class="fc" id="L97">			Map.entry(&quot;/api/params/get-aggregators&quot;, AGGREGATORS),</span>
+<span class="fc" id="L98">			Map.entry(&quot;/api/params/find-aggregator&quot;, AGGREGATORS),</span>
+<span class="fc" id="L99">			Map.entry(&quot;/api/params/save-aggregator&quot;, AGGREGATORS),</span>
+<span class="fc" id="L100">			Map.entry(&quot;/api/params/update-aggregator&quot;, AGGREGATORS),</span>
+<span class="fc" id="L101">			Map.entry(&quot;/api/params/delete-aggregator&quot;, AGGREGATORS),</span>
+
+<span class="fc" id="L103">			Map.entry(&quot;/api/params/get-banknames&quot;, BANK_NAME), Map.entry(&quot;/api/params/find-bankname&quot;, BANK_NAME),</span>
+<span class="fc" id="L104">			Map.entry(&quot;/api/params/save-bankname&quot;, BANK_NAME), Map.entry(&quot;/api/params/update-bankname&quot;, BANK_NAME),</span>
+<span class="fc" id="L105">			Map.entry(&quot;/api/params/delete-bankname&quot;, BANK_NAME),</span>
+
+<span class="fc" id="L107">			Map.entry(&quot;/api/params/add-city&quot;, CITIES), Map.entry(&quot;/api/params/edit-city&quot;, CITIES),</span>
+<span class="fc" id="L108">			Map.entry(&quot;/api/params/get-city-data&quot;, CITIES), Map.entry(&quot;/api/params/delete-city&quot;, CITIES),</span>
+<span class="fc" id="L109">			Map.entry(&quot;/api/params/get-cities&quot;, CITIES), Map.entry(&quot;/api/params/get-all-cities&quot;, CITIES),</span>
+
+<span class="fc" id="L111">			Map.entry(&quot;/api/params/get-countries&quot;, COUNTRIES), Map.entry(&quot;/api/params/find-country&quot;, COUNTRIES),</span>
+<span class="fc" id="L112">			Map.entry(&quot;/api/params/save-country&quot;, COUNTRIES), Map.entry(&quot;/api/params/update-country&quot;, COUNTRIES),</span>
+<span class="fc" id="L113">			Map.entry(&quot;/api/params/delete-country&quot;, COUNTRIES),</span>
+
+<span class="fc" id="L115">			Map.entry(&quot;/api/params/get-currencies&quot;, CURRENCIES), Map.entry(&quot;/api/params/find-currency&quot;, CURRENCIES),</span>
+<span class="fc" id="L116">			Map.entry(&quot;/api/params/save-currency&quot;, CURRENCIES), Map.entry(&quot;/api/params/update-currency&quot;, CURRENCIES),</span>
+<span class="fc" id="L117">			Map.entry(&quot;/api/params/delete-currency&quot;, CURRENCIES),</span>
+
+<span class="fc" id="L119">			Map.entry(&quot;/api/params/get-distributors&quot;, DISTRIBUTORS),</span>
+<span class="fc" id="L120">			Map.entry(&quot;/api/params/find-distributor&quot;, DISTRIBUTORS),</span>
+<span class="fc" id="L121">			Map.entry(&quot;/api/params/save-distributor&quot;, DISTRIBUTORS),</span>
+<span class="fc" id="L122">			Map.entry(&quot;/api/params/update-distributor&quot;, DISTRIBUTORS),</span>
+<span class="fc" id="L123">			Map.entry(&quot;/api/params/delete-distributor&quot;, DISTRIBUTORS),</span>
+
+<span class="fc" id="L125">			Map.entry(&quot;/api/params/get-ifsc&quot;, IFSC), Map.entry(&quot;/api/params/find-ifsc&quot;, IFSC),</span>
+<span class="fc" id="L126">			Map.entry(&quot;/api/params/save-ifsc&quot;, IFSC), Map.entry(&quot;/api/params/update-ifsc&quot;, IFSC),</span>
+<span class="fc" id="L127">			Map.entry(&quot;/api/params/delete-ifsc&quot;, IFSC),</span>
+
+<span class="fc" id="L129">			Map.entry(&quot;/api/params/get-institutions&quot;, INSTITUTIONS),</span>
+<span class="fc" id="L130">			Map.entry(&quot;/api/params/find-institution&quot;, INSTITUTIONS),</span>
+<span class="fc" id="L131">			Map.entry(&quot;/api/params/save-institution&quot;, INSTITUTIONS),</span>
+<span class="fc" id="L132">			Map.entry(&quot;/api/params/update-institution&quot;, INSTITUTIONS),</span>
+<span class="fc" id="L133">			Map.entry(&quot;/api/params/delete-institution&quot;, INSTITUTIONS),</span>
+
+<span class="fc" id="L135">			Map.entry(&quot;/api/params/get-mccsurcharge&quot;, MCC_SURCHARGE),</span>
+<span class="fc" id="L136">			Map.entry(&quot;/api/params/find-mccsurcharge&quot;, MCC_SURCHARGE),</span>
+<span class="fc" id="L137">			Map.entry(&quot;/api/params/save-mccsurcharge&quot;, MCC_SURCHARGE),</span>
+<span class="fc" id="L138">			Map.entry(&quot;/api/params/update-mccsurcharge&quot;, MCC_SURCHARGE),</span>
+<span class="fc" id="L139">			Map.entry(&quot;/api/params/delete-mccsurcharge&quot;, MCC_SURCHARGE),</span>
+
+<span class="fc" id="L141">			Map.entry(&quot;/api/params/get-merchantcategories&quot;, MERCHANT_CATEGORIES),</span>
+<span class="fc" id="L142">			Map.entry(&quot;/api/params/find-merchantcategory&quot;, MERCHANT_CATEGORIES),</span>
+<span class="fc" id="L143">			Map.entry(&quot;/api/params/save-merchantcategory&quot;, MERCHANT_CATEGORIES),</span>
+<span class="fc" id="L144">			Map.entry(&quot;/api/params/update-merchantcategory&quot;, MERCHANT_CATEGORIES),</span>
+<span class="fc" id="L145">			Map.entry(&quot;/api/params/delete-merchantcategory&quot;, MERCHANT_CATEGORIES),</span>
+
+<span class="fc" id="L147">			Map.entry(&quot;/api/params/get-pincodes&quot;, PIN_CODES), Map.entry(&quot;/api/params/find-pincode&quot;, PIN_CODES),</span>
+<span class="fc" id="L148">			Map.entry(&quot;/api/params/save-pincode&quot;, PIN_CODES), Map.entry(&quot;/api/params/update-pincode&quot;, PIN_CODES),</span>
+<span class="fc" id="L149">			Map.entry(&quot;/api/params/delete-pincode&quot;, PIN_CODES),</span>
+
+<span class="fc" id="L151">			Map.entry(&quot;/api/params/get-regions&quot;, REGIONS), Map.entry(&quot;/api/params/find-region&quot;, REGIONS),</span>
+<span class="fc" id="L152">			Map.entry(&quot;/api/params/save-region&quot;, REGIONS), Map.entry(&quot;/api/params/update-region&quot;, REGIONS),</span>
+<span class="fc" id="L153">			Map.entry(&quot;/api/params/delete-region&quot;, REGIONS),</span>
+
+<span class="fc" id="L155">			Map.entry(&quot;/api/params/get-riskhold&quot;, RISK_HOLDS), Map.entry(&quot;/api/params/find-riskhold&quot;, RISK_HOLDS),</span>
+<span class="fc" id="L156">			Map.entry(&quot;/api/params/save-riskhold&quot;, RISK_HOLDS), Map.entry(&quot;/api/params/update-riskhold&quot;, RISK_HOLDS),</span>
+<span class="fc" id="L157">			Map.entry(&quot;/api/params/delete-riskhold&quot;, RISK_HOLDS),</span>
+
+<span class="fc" id="L159">			Map.entry(&quot;/api/params/get-sharingpartner&quot;, SHARING_PARTNERS),</span>
+<span class="fc" id="L160">			Map.entry(&quot;/api/params/find-sharingpartner&quot;, SHARING_PARTNERS),</span>
+<span class="fc" id="L161">			Map.entry(&quot;/api/params/save-sharingpartner&quot;, SHARING_PARTNERS),</span>
+<span class="fc" id="L162">			Map.entry(&quot;/api/params/update-sharingpartner&quot;, SHARING_PARTNERS),</span>
+<span class="fc" id="L163">			Map.entry(&quot;/api/params/delete-sharingpartner&quot;, SHARING_PARTNERS),</span>
+
+<span class="fc" id="L165">			Map.entry(&quot;/api/params/add-state&quot;, STATES), Map.entry(&quot;/api/params/edit-state&quot;, STATES),</span>
+<span class="fc" id="L166">			Map.entry(&quot;/api/params/get-state-data&quot;, STATES), Map.entry(&quot;/api/params/delete-state&quot;, STATES),</span>
+<span class="fc" id="L167">			Map.entry(&quot;/api/params/get-states&quot;, STATES), Map.entry(&quot;/api/params/get-all-states&quot;, STATES),</span>
+
+<span class="fc" id="L169">			Map.entry(&quot;/api/params/get-terminalmake&quot;, TERMINAL_MAKE),</span>
+<span class="fc" id="L170">			Map.entry(&quot;/api/params/find-terminalmake&quot;, TERMINAL_MAKE),</span>
+<span class="fc" id="L171">			Map.entry(&quot;/api/params/save-terminalmake&quot;, TERMINAL_MAKE),</span>
+<span class="fc" id="L172">			Map.entry(&quot;/api/params/update-terminalmake&quot;, TERMINAL_MAKE),</span>
+<span class="fc" id="L173">			Map.entry(&quot;/api/params/delete-terminalmake&quot;, TERMINAL_MAKE),</span>
+
+<span class="fc" id="L175">			Map.entry(&quot;/api/params/get-terminalmodel&quot;, TERMINAL_MODEL),</span>
+<span class="fc" id="L176">			Map.entry(&quot;/api/params/find-terminalmodel&quot;, TERMINAL_MODEL),</span>
+<span class="fc" id="L177">			Map.entry(&quot;/api/params/save-terminalmodel&quot;, TERMINAL_MODEL),</span>
+<span class="fc" id="L178">			Map.entry(&quot;/api/params/update-terminalmodel&quot;, TERMINAL_MODEL),</span>
+<span class="fc" id="L179">			Map.entry(&quot;/api/params/delete-terminalmodel&quot;, TERMINAL_MODEL));</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

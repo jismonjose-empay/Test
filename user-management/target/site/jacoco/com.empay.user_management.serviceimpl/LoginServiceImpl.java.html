@@ -1,0 +1,750 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LoginServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">LoginServiceImpl.java</span></div><h1>LoginServiceImpl.java</h1><pre class="source lang-java linenums">package com.empay.user_management.serviceimpl;
+
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Locale;
+import org.springframework.security.core.Authentication;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import com.empay.user_management.entities.UserRoleEntityV2;
+
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
+import com.empay.user_management.utils.APIConstants;
+import com.empay.user_management.utils.JwtUtils;
+import java.time.Duration;
+import java.util.HashMap;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import com.empay.user_management.dto.ChangePasswordResponse;
+import com.empay.user_management.dto.LoginAttemptResponse;
+import com.empay.user_management.dto.LoginCheckResult;
+import com.empay.user_management.entities.LoginAttemptEntity;
+import com.empay.user_management.entities.UserCredentialEntity;
+import com.empay.user_management.entities.UsersEntityV2;
+import com.empay.user_management.repository.LoginAttemptRepository;
+import com.empay.user_management.repository.UserCredentialRepository;
+import com.empay.user_management.repository.UsersRepositoryV2;
+import com.empay.user_management.repository.UserAuthMethodRepository;
+import org.springframework.beans.factory.annotation.Value;
+import com.empay.user_management.service.LoginService;
+import com.empay.user_management.service.PasswordPolicyService;
+import com.empay.user_management.dto.PasswordValidationResult;
+import com.empay.user_management.dto.UserContext;
+import com.empay.user_management.service.UserActivityTrackingService;
+import com.empay.user_management.valueobjects.UserActivityTrackingVO;
+import java.util.LinkedHashMap;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+
+@Service
+<span class="fc" id="L56">@Log4j2</span>
+@RequiredArgsConstructor
+public class LoginServiceImpl implements LoginService {
+
+	private final LoginAttemptRepository loginAttemptRepo;
+
+	private final UsersRepositoryV2 usersRepositoryV2;
+
+	private final UserCredentialRepository userCredentialRepository;
+
+	private final com.empay.user_management.utils.JwtUtils jwtUtils;
+
+	private final PasswordPolicyService passwordPolicyService;
+
+	private final UserActivityTrackingService userActivityTrackingService;
+
+	private final UserAuthMethodRepository userAuthMethodRepository;
+
+	@Value(&quot;${server.servlet.session.cookie.secure:true}&quot;)
+	private boolean cookieSecure = true;
+
+	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
+
+	private final String dummyPasswordHash = passwordEncoder.encode(&quot;timing-mitigation-dummy-salt-2026&quot;);
+
+	private static final int MAX_FAILED_ATTEMPTS = 5;
+	private static final long LOCKOUT_MINUTES = 15;
+
+	private static final String UNKNOWN = &quot;UNKNOWN&quot;;
+	private static final String MESSAGE = &quot;message&quot;;
+<span class="fc" id="L86">	private static final ZoneId DEFAULT_ZONE = ZoneId.of(&quot;UTC&quot;);</span>
+	private static final String SUCCESS = &quot;success&quot;;
+	private static final String USER_ID = &quot;userId&quot;;
+	private static final String USERNAME = &quot;username&quot;;
+	private static final String ANONYMOUS_USER = &quot;anonymousUser&quot;;
+	private static final String AUTHENTICATED = &quot;authenticated&quot;;
+	private static final String SAME_SITE_STRICT = &quot;Strict&quot;;
+	private static final String NEW_PASSWORD = &quot;newPassword&quot;;
+	private static final String CONFIRM_PASSWORD = &quot;confirmPassword&quot;;
+
+	@Transactional
+	public ResponseEntity&lt;Object&gt; validateUserLogin(Map&lt;String, String&gt; inputDataMap, HttpServletRequest request) {
+
+<span class="fc bfc" id="L99" title="All 2 branches covered.">		if (inputDataMap == null) {</span>
+<span class="fc" id="L100">			insertIntoLoginAttempts(UNKNOWN, null, 'N', &quot;INVALID_INPUT&quot;, request);</span>
+<span class="fc" id="L101">			return ResponseEntity.badRequest().body(Map.of(MESSAGE, &quot;Username and password are required&quot;));</span>
+		}
+
+<span class="fc" id="L104">		String[] loginDetails = null;</span>
+<span class="fc bfc" id="L105" title="All 2 branches covered.">		String directUser = inputDataMap.get(inputDataMap.containsKey(USER_ID) ? USER_ID : USERNAME);</span>
+<span class="fc" id="L106">		String directPass = inputDataMap.get(&quot;password&quot;);</span>
+
+<span class="pc bpc" id="L108" title="2 of 8 branches missed.">		if (directUser != null &amp;&amp; !directUser.isBlank() &amp;&amp; directPass != null &amp;&amp; !directPass.isBlank()) {</span>
+<span class="fc" id="L109">			loginDetails = new String[]{ directUser.trim(), directPass };</span>
+		} else {
+<span class="fc" id="L111">			String inputData = inputDataMap.get(&quot;inputData&quot;);</span>
+<span class="pc bpc" id="L112" title="1 of 4 branches missed.">			if (inputData == null || inputData.isBlank()) {</span>
+<span class="fc" id="L113">				insertIntoLoginAttempts(UNKNOWN, null, 'N', &quot;INVALID_INPUT&quot;, request);</span>
+<span class="fc" id="L114">				return ResponseEntity.badRequest().body(Map.of(MESSAGE, &quot;Username and password are required&quot;));</span>
+			}
+<span class="fc" id="L116">			loginDetails = decryptInput(inputData);</span>
+		}
+
+<span class="fc bfc" id="L119" title="All 6 branches covered.">		if (loginDetails.length == 0 || loginDetails[0].length() &gt; 100 || loginDetails[1].length() &gt; 256) {</span>
+<span class="fc" id="L120">			insertIntoLoginAttempts(UNKNOWN, null, 'N', &quot;INVALID_INPUT_DATA&quot;, request);</span>
+<span class="fc" id="L121">			return ResponseEntity.badRequest().body(Map.of(MESSAGE, &quot;Invalid login data&quot;));</span>
+		}
+
+<span class="fc" id="L124">		String userId = loginDetails[0];</span>
+
+<span class="fc" id="L126">		LoginCheckResult result = loginCheck(loginDetails, request);</span>
+
+<span class="fc bfc" id="L128" title="All 2 branches covered.">		insertIntoLoginAttempts(userId, result.userSerialNumber(), result.authenticated() ? 'Y' : 'N',</span>
+<span class="fc" id="L129">				result.failureReason(), request);</span>
+
+<span class="fc bfc" id="L131" title="All 2 branches covered.">		if (!result.authenticated()) {</span>
+<span class="fc" id="L132">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(MESSAGE, &quot;Invalid user ID or password&quot;));</span>
+		}
+
+<span class="fc" id="L135">		String token = jwtUtils.generateToken(userId, result.userSerialNumber(), result.userRole());</span>
+<span class="fc" id="L136">		Map&lt;String, Object&gt; responseBody = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L137">		responseBody.put(MESSAGE, &quot;Login successful&quot;);</span>
+<span class="fc" id="L138">		responseBody.put(USER_ID, userId);</span>
+		// Finding S5: Do NOT echo session token into response body. The HttpOnly cookie is the session.
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">		if (result.userRole() != null) {</span>
+<span class="nc" id="L141">			responseBody.put(&quot;userRole&quot;, result.userRole());</span>
+<span class="nc" id="L142">			responseBody.put(&quot;role&quot;, result.userRole());</span>
+		}
+
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">		ResponseCookie cookie = ResponseCookie.from(APIConstants.ACCESS_TOKEN_COOKIE, token != null ? token : &quot;&quot;)</span>
+<span class="fc" id="L146">				.httpOnly(true)</span>
+<span class="fc" id="L147">				.secure(cookieSecure)</span>
+<span class="fc" id="L148">				.path(&quot;/&quot;)</span>
+<span class="fc" id="L149">				.maxAge(Duration.ofMinutes(APIConstants.ACCESS_TOKEN_EXPIRY_IN_MINUTES))</span>
+<span class="fc" id="L150">				.sameSite(SAME_SITE_STRICT)</span>
+<span class="fc" id="L151">				.build();</span>
+
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">		ResponseCookie authCookie = ResponseCookie.from(&quot;AUTH_TOKEN&quot;, token != null ? token : &quot;&quot;)</span>
+<span class="fc" id="L154">				.httpOnly(true)</span>
+<span class="fc" id="L155">				.secure(cookieSecure)</span>
+<span class="fc" id="L156">				.path(&quot;/&quot;)</span>
+<span class="fc" id="L157">				.maxAge(Duration.ofMinutes(APIConstants.ACCESS_TOKEN_EXPIRY_IN_MINUTES))</span>
+<span class="fc" id="L158">				.sameSite(SAME_SITE_STRICT)</span>
+<span class="fc" id="L159">				.build();</span>
+
+<span class="fc" id="L161">		return ResponseEntity.ok()</span>
+				// Finding S5: Do NOT set Authorization header in response. The HttpOnly cookie is the session.
+<span class="fc" id="L163">				.header(HttpHeaders.SET_COOKIE, cookie.toString())</span>
+<span class="fc" id="L164">				.header(HttpHeaders.SET_COOKIE, authCookie.toString())</span>
+<span class="fc" id="L165">				.body(responseBody);</span>
+	}
+
+	private String[] decryptInput(String inputLoginData) {
+		try {
+<span class="fc" id="L170">			String dataString = new String(Hex.decodeHex(inputLoginData), StandardCharsets.UTF_8);</span>
+
+			// Support JSON payload in hex
+<span class="pc bpc" id="L173" title="1 of 4 branches missed.">			if (dataString.trim().startsWith(&quot;{&quot;) &amp;&amp; dataString.trim().endsWith(&quot;}&quot;)) {</span>
+<span class="fc" id="L174">				String trimmed = dataString.trim();</span>
+<span class="fc" id="L175">				String user = extractJsonField(trimmed, USER_ID);</span>
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">				if (user == null) user = extractJsonField(trimmed, USERNAME);</span>
+<span class="fc" id="L177">				String pass = extractJsonField(trimmed, &quot;password&quot;);</span>
+<span class="pc bpc" id="L178" title="4 of 8 branches missed.">				if (user != null &amp;&amp; !user.isBlank() &amp;&amp; pass != null &amp;&amp; !pass.isBlank()) {</span>
+<span class="fc" id="L179">					return new String[]{ user, pass };</span>
+				}
+			}
+
+			// Split on first comma only so commas in password are preserved (Finding 14)
+<span class="fc" id="L184">			String[] loginDetails = dataString.split(&quot;,&quot;, 2);</span>
+
+<span class="pc bpc" id="L186" title="3 of 6 branches missed.">			if (loginDetails.length &lt; 2 || loginDetails[0].isBlank() || loginDetails[1].isBlank()) {</span>
+<span class="nc" id="L187">				return new String[0];</span>
+			}
+
+<span class="fc" id="L190">			return loginDetails;</span>
+
+<span class="fc" id="L192">		} catch (DecoderException e) {</span>
+<span class="fc" id="L193">			return new String[0];</span>
+		}
+	}
+
+	private String extractJsonField(String json, String field) {
+<span class="fc" id="L198">		String key = &quot;\&quot;&quot; + field + &quot;\&quot;&quot;;</span>
+<span class="fc" id="L199">		int idx = json.indexOf(key);</span>
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">		if (idx == -1) return null;</span>
+<span class="fc" id="L201">		int colon = json.indexOf(&quot;:&quot;, idx + key.length());</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">		if (colon == -1) return null;</span>
+<span class="fc" id="L203">		int firstQuote = json.indexOf(&quot;\&quot;&quot;, colon + 1);</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">		if (firstQuote == -1) return null;</span>
+<span class="fc" id="L205">		int secondQuote = json.indexOf(&quot;\&quot;&quot;, firstQuote + 1);</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">		if (secondQuote == -1) return null;</span>
+<span class="fc" id="L207">		return json.substring(firstQuote + 1, secondQuote);</span>
+	}
+
+	private LoginCheckResult loginCheck(String[] loginDetails, HttpServletRequest request) {
+<span class="fc" id="L211">		String userId = loginDetails[0];</span>
+<span class="fc" id="L212">		String password = loginDetails[1];</span>
+
+<span class="fc" id="L214">		UsersEntityV2 userEntity = usersRepositoryV2.findByUserId(userId);</span>
+<span class="fc bfc" id="L215" title="All 2 branches covered.">		if (userEntity == null) {</span>
+<span class="fc" id="L216">			simulateHashWork(password);</span>
+<span class="fc" id="L217">			return new LoginCheckResult(false, null, &quot;USER_NOT_FOUND&quot;);</span>
+		}
+
+<span class="fc" id="L220">		Integer serialNumber = userEntity.getSerialNumber();</span>
+<span class="fc" id="L221">		String eligibilityError = checkUserEligibility(userEntity, serialNumber);</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">		if (eligibilityError != null) {</span>
+<span class="fc" id="L223">			simulateHashWork(password);</span>
+<span class="fc" id="L224">			return new LoginCheckResult(false, serialNumber, eligibilityError);</span>
+		}
+
+<span class="fc" id="L227">		UserCredentialEntity credential = userCredentialRepository.findByUserSerialNo(serialNumber);</span>
+<span class="fc bfc" id="L228" title="All 2 branches covered.">		if (credential == null) {</span>
+<span class="fc" id="L229">			simulateHashWork(password);</span>
+<span class="fc" id="L230">			return new LoginCheckResult(false, serialNumber, &quot;CREDENTIAL_NOT_FOUND&quot;);</span>
+		}
+
+<span class="fc" id="L233">		LocalDateTime now = LocalDateTime.now(DEFAULT_ZONE);</span>
+<span class="fc bfc" id="L234" title="All 2 branches covered.">		if (isAccountLocked(credential, now)) {</span>
+			// Finding 20: Simulate hash work on locked path to eliminate timing side-channel
+<span class="fc" id="L236">			simulateHashWork(password);</span>
+<span class="fc" id="L237">			return new LoginCheckResult(false, serialNumber, &quot;ACCOUNT_LOCKED&quot;);</span>
+		}
+
+<span class="fc bfc" id="L240" title="All 2 branches covered.">		if (!validateLogin(credential, password)) {</span>
+<span class="fc" id="L241">			registerFailedLogin(credential, now);</span>
+<span class="fc" id="L242">			return new LoginCheckResult(false, serialNumber, &quot;INVALID_PASSWORD&quot;);</span>
+		}
+
+<span class="fc" id="L245">		recordSuccessfulLogin(credential, now, request);</span>
+<span class="fc" id="L246">		String userRole = resolveUserRole(userEntity);</span>
+<span class="fc" id="L247">		return new LoginCheckResult(true, serialNumber, null, userRole);</span>
+	}
+
+	private void simulateHashWork(String password) {
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">		passwordEncoder.matches(password != null ? password : &quot;&quot;, dummyPasswordHash);</span>
+<span class="fc" id="L252">	}</span>
+
+	private boolean isPasswordDisabledByAuthMode(String authMode) {
+<span class="pc bpc" id="L255" title="1 of 4 branches missed.">		if (authMode == null || authMode.isBlank()) {</span>
+<span class="fc" id="L256">			return false;</span>
+		}
+<span class="fc" id="L258">		String cleanMode = authMode.trim().toUpperCase(Locale.ROOT);</span>
+<span class="pc bpc" id="L259" title="7 of 8 branches missed.">		return &quot;SSO&quot;.equals(cleanMode) || &quot;OAUTH&quot;.equals(cleanMode) || &quot;EXTERNAL&quot;.equals(cleanMode) || &quot;SAML&quot;.equals(cleanMode);</span>
+	}
+
+	private boolean isPasswordDisabledByAuthMethods(Integer serialNumber) {
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">		if (userAuthMethodRepository == null) {</span>
+<span class="nc" id="L264">			return false;</span>
+		}
+<span class="fc" id="L266">		var authMethods = userAuthMethodRepository.findByUserSerialNo(serialNumber);</span>
+<span class="pc bpc" id="L267" title="1 of 4 branches missed.">		if (authMethods == null || authMethods.isEmpty()) {</span>
+<span class="fc" id="L268">			return false;</span>
+		}
+<span class="fc" id="L270">		return authMethods.stream()</span>
+<span class="pc bpc" id="L271" title="1 of 2 branches missed.">				.noneMatch(m -&gt; &quot;LOCAL_PASSWORD&quot;.equalsIgnoreCase(m.getProvider())</span>
+<span class="pc bpc" id="L272" title="2 of 4 branches missed.">						&amp;&amp; Character.toUpperCase(m.getIsEnabled() != null ? m.getIsEnabled() : 'N') == 'Y');</span>
+	}
+
+	private String checkUserEligibility(UsersEntityV2 userEntity, Integer serialNumber) {
+<span class="fc bfc" id="L276" title="All 2 branches covered.">		if (!&quot;ACTIVE&quot;.equalsIgnoreCase(userEntity.getStatus())) {</span>
+<span class="fc" id="L277">			return &quot;USER_NOT_ACTIVE&quot;;</span>
+		}
+<span class="fc bfc" id="L279" title="All 4 branches covered.">		if (isPasswordDisabledByAuthMode(userEntity.getAuthMode()) || isPasswordDisabledByAuthMethods(serialNumber)) {</span>
+<span class="fc" id="L280">			return &quot;PASSWORD_AUTH_DISABLED&quot;;</span>
+		}
+<span class="fc" id="L282">		return null;</span>
+	}
+
+	private boolean isAccountLocked(UserCredentialEntity credential, LocalDateTime now) {
+<span class="pc bpc" id="L286" title="1 of 4 branches missed.">		if (credential.getLockedUntil() != null &amp;&amp; credential.getLockedUntil().isAfter(now)) {</span>
+<span class="fc" id="L287">			return true;</span>
+		}
+<span class="pc bpc" id="L289" title="3 of 4 branches missed.">		if (credential.getLockedUntil() != null &amp;&amp; !credential.getLockedUntil().isAfter(now)) {</span>
+<span class="nc" id="L290">			credential.setLockedUntil(null);</span>
+		}
+<span class="fc" id="L292">		return false;</span>
+	}
+
+	private void recordSuccessfulLogin(UserCredentialEntity credential, LocalDateTime now, HttpServletRequest request) {
+<span class="fc" id="L296">		credential.setPreviousSuccessAt(credential.getLastSuccessAt());</span>
+<span class="fc" id="L297">		credential.setPreviousSuccessIp(credential.getLastSuccessIp());</span>
+<span class="fc" id="L298">		credential.setFailedAttempts(0);</span>
+<span class="fc" id="L299">		credential.setFirstFailedAt(null);</span>
+<span class="fc" id="L300">		credential.setLockedUntil(null);</span>
+<span class="fc" id="L301">		credential.setLastSuccessAt(now);</span>
+<span class="pc bpc" id="L302" title="1 of 2 branches missed.">		if (request != null) {</span>
+<span class="fc" id="L303">			credential.setLastSuccessIp(request.getRemoteAddr());</span>
+		}
+<span class="fc" id="L305">		userCredentialRepository.save(credential);</span>
+<span class="fc" id="L306">	}</span>
+
+	private String resolveUserRole(UsersEntityV2 userEntity) {
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">		if (userEntity == null) {</span>
+<span class="nc" id="L310">			return null;</span>
+		}
+<span class="fc" id="L312">		List&lt;UserRoleEntityV2&gt; roles = userEntity.getUserRoles();</span>
+<span class="pc bpc" id="L313" title="3 of 4 branches missed.">		if (roles != null &amp;&amp; !roles.isEmpty()) {</span>
+<span class="nc" id="L314">			return roles.stream()</span>
+<span class="nc" id="L315">					.map(UserRoleEntityV2::getRoleCode)</span>
+<span class="nc" id="L316">					.filter(Objects::nonNull)</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">					.filter(r -&gt; !r.isBlank())</span>
+<span class="nc" id="L318">					.distinct()</span>
+<span class="nc" id="L319">					.collect(Collectors.joining(&quot;,&quot;));</span>
+		}
+<span class="fc" id="L321">		return null;</span>
+	}
+
+	private boolean validateLogin(UserCredentialEntity userCredential, String password) {
+<span class="fc" id="L325">		String storedHash = userCredential.getPasswordHash();</span>
+<span class="pc bpc" id="L326" title="1 of 4 branches missed.">		return storedHash != null &amp;&amp; passwordEncoder.matches(password, storedHash);</span>
+	}
+
+	private void registerFailedLogin(UserCredentialEntity credential, LocalDateTime now) {
+
+<span class="fc" id="L331">		int failedAttempts = credential.getFailedAttempts();</span>
+
+<span class="fc" id="L333">		credential.setFailedAttempts(failedAttempts + 1);</span>
+
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">		if (credential.getFirstFailedAt() == null) {</span>
+<span class="fc" id="L336">			credential.setFirstFailedAt(now);</span>
+		}
+
+<span class="pc bpc" id="L339" title="1 of 2 branches missed.">		if (failedAttempts + 1 &gt;= MAX_FAILED_ATTEMPTS) {</span>
+
+<span class="nc" id="L341">			credential.setLockedUntil(now.plusMinutes(LOCKOUT_MINUTES));</span>
+
+<span class="nc" id="L343">			credential.setLockoutCount(credential.getLockoutCount() + 1);</span>
+		}
+
+<span class="fc" id="L346">		userCredentialRepository.save(credential);</span>
+<span class="fc" id="L347">	}</span>
+
+	private void insertIntoLoginAttempts(String userId, Integer userSerialNumber, Character succeeded,
+			String failureReason, HttpServletRequest request) {
+
+<span class="fc" id="L352">		LoginAttemptEntity attempt = new LoginAttemptEntity();</span>
+
+<span class="fc" id="L354">		attempt.setUserId(userId);</span>
+<span class="fc" id="L355">		attempt.setUserSerialNumber(userSerialNumber);</span>
+<span class="fc" id="L356">		attempt.setSucceeded(succeeded);</span>
+<span class="fc" id="L357">		attempt.setFailureReason(failureReason);</span>
+
+<span class="pc bpc" id="L359" title="1 of 2 branches missed.">		if (request != null) {</span>
+<span class="fc" id="L360">			attempt.setSourceIp(request.getRemoteAddr());</span>
+<span class="fc" id="L361">			attempt.setUserAgent(request.getHeader(&quot;User-Agent&quot;));</span>
+
+<span class="fc" id="L363">			HttpSession session = request.getSession(false);</span>
+
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">			if (session != null) {</span>
+<span class="nc" id="L366">				attempt.setSessionId(session.getId());</span>
+			}
+		}
+
+<span class="fc" id="L370">		loginAttemptRepo.save(attempt);</span>
+<span class="fc" id="L371">	}</span>
+
+	@Override
+	public List&lt;LoginAttemptResponse&gt; getLoginAttempts() {
+<span class="fc" id="L375">		return mapToLoginAttemptResponse(loginAttemptRepo.findTop100ByOrderByAttemptedAtDesc());</span>
+	}
+
+	private List&lt;LoginAttemptResponse&gt; mapToLoginAttemptResponse(List&lt;LoginAttemptEntity&gt; loginAttemptList) {
+
+<span class="fc" id="L380">		return loginAttemptList.stream().map(attempt -&gt; {</span>
+<span class="fc" id="L381">			LoginAttemptResponse response = new LoginAttemptResponse();</span>
+
+<span class="fc" id="L383">			response.setId(String.valueOf(attempt.getAttemptId()));</span>
+<span class="fc" id="L384">			response.setReason(attempt.getFailureReason());</span>
+
+<span class="pc bpc" id="L386" title="3 of 5 branches missed.">			response.setResult(switch (attempt.getSucceeded() == null ? ' ' : attempt.getSucceeded()) {</span>
+<span class="nc" id="L387">			case 'N' -&gt; &quot;FAIL&quot;;</span>
+<span class="nc" id="L388">			case 'Y' -&gt; &quot;OK&quot;;</span>
+<span class="fc" id="L389">			default -&gt; null;</span>
+			});
+
+<span class="fc" id="L392">			response.setSourceIp(attempt.getSourceIp());</span>
+<span class="fc" id="L393">			response.setUser(attempt.getUserId());</span>
+
+<span class="pc bpc" id="L395" title="1 of 2 branches missed.">			if (attempt.getAttemptedAt() != null) {</span>
+<span class="nc" id="L396">				response.setWhen(attempt.getAttemptedAt().format(DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd HH:mm&quot;)));</span>
+			}
+
+<span class="fc" id="L399">			return response;</span>
+<span class="fc" id="L400">		}).toList();</span>
+	}
+
+<span class="fc" id="L403">	private record PasswordChangePayload(String newPassword, String resolvedUserId, String currentPassword, String confirmPassword) {}</span>
+
+	private PasswordChangePayload resolveEncryptedPayload(String inputData) {
+<span class="pc bpc" id="L406" title="1 of 4 branches missed.">		if (inputData == null || inputData.isBlank()) {</span>
+<span class="fc" id="L407">			return null;</span>
+		}
+<span class="fc" id="L409">		String[] loginDetails = decryptPwdData(inputData);</span>
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">		if (loginDetails.length &lt; 3) {</span>
+<span class="nc" id="L411">			return null;</span>
+		}
+<span class="fc" id="L413">		String newPassword = loginDetails[0];</span>
+<span class="fc" id="L414">		String resolvedUserId = loginDetails[1];</span>
+<span class="fc" id="L415">		String currentPassword = loginDetails[2];</span>
+<span class="pc bpc" id="L416" title="1 of 2 branches missed.">		String confirmPassword = loginDetails.length &gt;= 4 ? loginDetails[3] : null;</span>
+<span class="fc" id="L417">		return new PasswordChangePayload(newPassword, resolvedUserId, currentPassword, confirmPassword);</span>
+	}
+
+	private String resolveCurrentPassword(Map&lt;String, String&gt; inputDataMap, String fallback) {
+<span class="pc bpc" id="L421" title="1 of 4 branches missed.">		if (fallback != null &amp;&amp; !fallback.isBlank()) {</span>
+<span class="fc" id="L422">			return fallback;</span>
+		}
+<span class="fc" id="L424">		String current = inputDataMap.get(&quot;currentPassword&quot;);</span>
+<span class="fc bfc" id="L425" title="All 2 branches covered.">		return current != null ? current : inputDataMap.get(&quot;oldPassword&quot;);</span>
+	}
+
+	private String resolveSecurityContextUser() {
+<span class="fc" id="L429">		Authentication auth = SecurityContextHolder.getContext().getAuthentication();</span>
+<span class="pc bpc" id="L430" title="1 of 2 branches missed.">		if (auth == null) {</span>
+<span class="fc" id="L431">			return null;</span>
+		}
+<span class="nc" id="L433">		String authName = auth.getName();</span>
+<span class="nc bnc" id="L434" title="All 6 branches missed.">		if (authName != null &amp;&amp; !authName.isBlank() &amp;&amp; !ANONYMOUS_USER.equalsIgnoreCase(authName)) {</span>
+<span class="nc" id="L435">			return authName;</span>
+		}
+<span class="nc" id="L437">		return null;</span>
+	}
+
+	private PasswordChangePayload resolvePasswordChangePayload(Map&lt;String, String&gt; inputDataMap) {
+		// Finding 14: Support direct JSON body fields first so passwords with commas are never truncated
+<span class="fc" id="L442">		String directNewPassword = inputDataMap.get(NEW_PASSWORD);</span>
+<span class="fc" id="L443">		String directUserId = inputDataMap.get(USER_ID);</span>
+<span class="fc" id="L444">		String directCurrentPassword = resolveCurrentPassword(inputDataMap, null);</span>
+<span class="fc" id="L445">		String directConfirmPassword = inputDataMap.get(CONFIRM_PASSWORD);</span>
+
+<span class="pc bpc" id="L447" title="2 of 8 branches missed.">		if (directNewPassword != null &amp;&amp; !directNewPassword.isBlank() &amp;&amp; directCurrentPassword != null &amp;&amp; !directCurrentPassword.isBlank()) {</span>
+<span class="pc bpc" id="L448" title="1 of 4 branches missed.">			String resolvedUser = (directUserId != null &amp;&amp; !directUserId.isBlank()) ? directUserId : resolveSecurityContextUser();</span>
+<span class="fc" id="L449">			return new PasswordChangePayload(directNewPassword, resolvedUser, directCurrentPassword, directConfirmPassword);</span>
+		}
+
+<span class="fc" id="L452">		PasswordChangePayload encrypted = resolveEncryptedPayload(inputDataMap.get(&quot;inputData&quot;));</span>
+
+<span class="pc bpc" id="L454" title="2 of 6 branches missed.">		String newPassword = (encrypted != null &amp;&amp; encrypted.newPassword() != null &amp;&amp; !encrypted.newPassword().isBlank())</span>
+<span class="fc" id="L455">				? encrypted.newPassword()</span>
+<span class="fc" id="L456">				: inputDataMap.get(NEW_PASSWORD);</span>
+
+<span class="pc bpc" id="L458" title="2 of 6 branches missed.">		String resolvedUserId = (encrypted != null &amp;&amp; encrypted.resolvedUserId() != null &amp;&amp; !encrypted.resolvedUserId().isBlank())</span>
+<span class="fc" id="L459">				? encrypted.resolvedUserId()</span>
+<span class="fc" id="L460">				: inputDataMap.get(USER_ID);</span>
+
+<span class="fc bfc" id="L462" title="All 2 branches covered.">		String currentPassword = resolveCurrentPassword(inputDataMap, encrypted != null ? encrypted.currentPassword() : null);</span>
+
+<span class="pc bpc" id="L464" title="2 of 6 branches missed.">		String confirmPassword = (encrypted != null &amp;&amp; encrypted.confirmPassword() != null &amp;&amp; !encrypted.confirmPassword().isBlank())</span>
+<span class="fc" id="L465">				? encrypted.confirmPassword()</span>
+<span class="fc" id="L466">				: inputDataMap.get(CONFIRM_PASSWORD);</span>
+
+<span class="pc bpc" id="L468" title="2 of 4 branches missed.">		if (resolvedUserId == null || resolvedUserId.isBlank()) {</span>
+<span class="nc" id="L469">			resolvedUserId = resolveSecurityContextUser();</span>
+		}
+<span class="fc" id="L471">		return new PasswordChangePayload(newPassword, resolvedUserId, currentPassword, confirmPassword);</span>
+	}
+
+	private String validatePasswordChangePayload(PasswordChangePayload payload) {
+<span class="pc bpc" id="L475" title="1 of 4 branches missed.">		if (payload.resolvedUserId() == null || payload.resolvedUserId().isBlank()) {</span>
+<span class="fc" id="L476">			return &quot;User ID is required&quot;;</span>
+		}
+<span class="pc bpc" id="L478" title="1 of 4 branches missed.">		if (payload.currentPassword() == null || payload.currentPassword().isBlank()) {</span>
+<span class="fc" id="L479">			return &quot;Current password is required&quot;;</span>
+		}
+<span class="pc bpc" id="L481" title="1 of 4 branches missed.">		if (payload.newPassword() == null || payload.newPassword().isBlank()) {</span>
+<span class="fc" id="L482">			return &quot;New password is required&quot;;</span>
+		}
+<span class="fc bfc" id="L484" title="All 2 branches covered.">		if (payload.resolvedUserId().length() &gt; 100) {</span>
+<span class="fc" id="L485">			return &quot;User ID cannot exceed 100 characters&quot;;</span>
+		}
+<span class="pc bpc" id="L487" title="1 of 4 branches missed.">		if (payload.currentPassword().length() &gt; 256 || payload.newPassword().length() &gt; 256) {</span>
+<span class="fc" id="L488">			return &quot;Password cannot exceed 256 characters&quot;;</span>
+		}
+<span class="pc bpc" id="L490" title="1 of 4 branches missed.">		if (payload.confirmPassword() != null &amp;&amp; !payload.confirmPassword().isBlank()</span>
+<span class="pc bpc" id="L491" title="1 of 4 branches missed.">				&amp;&amp; !&quot;NA&quot;.equalsIgnoreCase(payload.confirmPassword()) &amp;&amp; !payload.newPassword().equals(payload.confirmPassword())) {</span>
+<span class="fc" id="L492">			return &quot;New password and confirmation password do not match&quot;;</span>
+		}
+<span class="fc" id="L494">		return null;</span>
+	}
+
+	@Override
+	@Transactional
+	public ResponseEntity&lt;Object&gt; changeUserPassword(Map&lt;String, String&gt; inputDataMap) {
+
+<span class="fc bfc" id="L501" title="All 4 branches covered.">		if (inputDataMap == null || inputDataMap.isEmpty()) {</span>
+<span class="fc" id="L502">			return ResponseEntity.badRequest().body(Map.of(MESSAGE, &quot;Invalid request data&quot;, SUCCESS, false));</span>
+		}
+
+<span class="fc" id="L505">		PasswordChangePayload payload = resolvePasswordChangePayload(inputDataMap);</span>
+<span class="fc" id="L506">		String error = validatePasswordChangePayload(payload);</span>
+<span class="fc bfc" id="L507" title="All 2 branches covered.">		if (error != null) {</span>
+<span class="fc" id="L508">			return ResponseEntity.badRequest().body(Map.of(MESSAGE, error, SUCCESS, false));</span>
+		}
+
+<span class="fc" id="L511">		ChangePasswordResponse result = changeUserPassword(payload.newPassword(), payload.resolvedUserId(), payload.currentPassword());</span>
+
+<span class="fc bfc" id="L513" title="All 2 branches covered.">		if (!result.isSuccess()) {</span>
+<span class="fc" id="L514">			Map&lt;String, Object&gt; errorBody = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L515">			errorBody.put(SUCCESS, false);</span>
+<span class="fc" id="L516">			errorBody.put(MESSAGE, result.getMessage());</span>
+<span class="pc bpc" id="L517" title="1 of 4 branches missed.">			if (result.getViolations() != null &amp;&amp; !result.getViolations().isEmpty()) {</span>
+<span class="fc" id="L518">				errorBody.put(&quot;violations&quot;, result.getViolations());</span>
+			}
+<span class="fc" id="L520">			return ResponseEntity.badRequest().body(errorBody);</span>
+		}
+
+<span class="fc" id="L523">		Map&lt;String, Object&gt; successBody = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L524">		successBody.put(SUCCESS, true);</span>
+<span class="fc" id="L525">		successBody.put(MESSAGE, result.getMessage());</span>
+<span class="fc" id="L526">		return ResponseEntity.ok(successBody);</span>
+	}
+
+	private String[] parseJsonPasswordPayload(String trimmed) {
+<span class="nc" id="L530">		String newPass = extractJsonField(trimmed, NEW_PASSWORD);</span>
+<span class="nc" id="L531">		String user = extractJsonField(trimmed, USER_ID);</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">		if (user == null) user = extractJsonField(trimmed, USERNAME);</span>
+<span class="nc" id="L533">		String currentPass = extractJsonField(trimmed, &quot;currentPassword&quot;);</span>
+<span class="nc bnc" id="L534" title="All 2 branches missed.">		if (currentPass == null) currentPass = extractJsonField(trimmed, &quot;oldPassword&quot;);</span>
+<span class="nc" id="L535">		String confirmPass = extractJsonField(trimmed, CONFIRM_PASSWORD);</span>
+<span class="nc bnc" id="L536" title="All 6 branches missed.">		if (newPass != null &amp;&amp; user != null &amp;&amp; currentPass != null) {</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">			return confirmPass != null</span>
+<span class="nc" id="L538">					? new String[]{ newPass, user, currentPass, confirmPass }</span>
+<span class="nc" id="L539">					: new String[]{ newPass, user, currentPass };</span>
+		}
+<span class="nc" id="L541">		return new String[0];</span>
+	}
+
+	private String[] decryptPwdData(String inputPwdData) {
+<span class="pc bpc" id="L545" title="2 of 4 branches missed.">		if (inputPwdData == null || inputPwdData.isBlank()) {</span>
+<span class="nc" id="L546">			return new String[0];</span>
+		}
+
+		try {
+<span class="fc" id="L550">			byte[] decodedBytes = Hex.decodeHex(inputPwdData.toCharArray());</span>
+<span class="fc" id="L551">			String dataString = new String(decodedBytes, StandardCharsets.UTF_8).trim();</span>
+
+<span class="pc bpc" id="L553" title="3 of 4 branches missed.">			if (dataString.startsWith(&quot;{&quot;) &amp;&amp; dataString.endsWith(&quot;}&quot;)) {</span>
+<span class="nc" id="L554">				String[] jsonDetails = parseJsonPasswordPayload(dataString);</span>
+<span class="nc bnc" id="L555" title="All 2 branches missed.">				if (jsonDetails.length &gt; 0) {</span>
+<span class="nc" id="L556">					return jsonDetails;</span>
+				}
+			}
+
+			// Split on first 3 commas only so commas in passwords are not fragmented (Finding 14)
+<span class="fc" id="L561">			String[] loginDetails = dataString.split(&quot;,&quot;, 4);</span>
+<span class="pc bpc" id="L562" title="1 of 2 branches missed.">			return loginDetails.length &gt;= 3 ? loginDetails : new String[0];</span>
+<span class="nc" id="L563">		} catch (DecoderException e) {</span>
+<span class="nc" id="L564">			return new String[0];</span>
+		}
+	}
+
+	private ChangePasswordResponse changeUserPassword(String newPassword, String userId, String currentPassword) {
+<span class="fc" id="L569">		UsersEntityV2 userEntity = usersRepositoryV2.findByUserId(userId);</span>
+
+<span class="fc bfc" id="L571" title="All 2 branches covered.">		if (userEntity == null) {</span>
+<span class="fc" id="L572">			return ChangePasswordResponse.ofFailure(&quot;User not found&quot;);</span>
+		}
+
+<span class="fc" id="L575">		UserCredentialEntity credential = userCredentialRepository.findByUserSerialNo(userEntity.getSerialNumber());</span>
+
+<span class="fc bfc" id="L577" title="All 2 branches covered.">		if (credential == null) {</span>
+<span class="fc" id="L578">			return ChangePasswordResponse.ofFailure(&quot;User credentials not found&quot;);</span>
+		}
+
+<span class="fc" id="L581">		LocalDateTime now = LocalDateTime.now(DEFAULT_ZONE);</span>
+
+		// Check whether the account is currently locked (Finding 12)
+<span class="pc bpc" id="L584" title="1 of 4 branches missed.">		if (credential.getLockedUntil() != null &amp;&amp; credential.getLockedUntil().isAfter(now)) {</span>
+<span class="fc" id="L585">			return ChangePasswordResponse.ofFailure(&quot;Account is currently locked. Try again later.&quot;);</span>
+		}
+
+		// Clear an expired lock before checking the password
+<span class="pc bpc" id="L589" title="3 of 4 branches missed.">		if (credential.getLockedUntil() != null &amp;&amp; !credential.getLockedUntil().isAfter(now)) {</span>
+<span class="nc" id="L590">			credential.setLockedUntil(null);</span>
+		}
+
+		// Validate current password with failed login tracking and lockout enforcement (Finding 12)
+<span class="fc bfc" id="L594" title="All 2 branches covered.">		if (!validateLogin(credential, currentPassword)) {</span>
+<span class="fc" id="L595">			registerFailedLogin(credential, now);</span>
+<span class="fc" id="L596">			return ChangePasswordResponse.ofFailure(&quot;Current password is incorrect&quot;);</span>
+		}
+
+		// Enforce active password policy engine
+<span class="pc bpc" id="L600" title="1 of 2 branches missed.">		if (passwordPolicyService != null) {</span>
+<span class="fc" id="L601">			UserContext userContext = new UserContext(userId, userEntity.getEmail(), userEntity.getDisplayName());</span>
+<span class="fc" id="L602">			PasswordValidationResult policyResult = passwordPolicyService.validatePassword(newPassword, userContext);</span>
+<span class="fc bfc" id="L603" title="All 2 branches covered.">			if (!policyResult.valid()) {</span>
+<span class="fc" id="L604">				String errors = String.join(&quot;, &quot;, policyResult.violations());</span>
+<span class="fc" id="L605">				log.warn(&quot;Password change for user [{}] rejected: does not satisfy active password policy. Violations: {}&quot;, userId, errors);</span>
+<span class="fc" id="L606">				return ChangePasswordResponse.ofFailure(&quot;Password does not meet active policy requirements: &quot; + errors, policyResult.violations());</span>
+			}
+		}
+
+		// Ensure new password is not identical to current password
+<span class="fc bfc" id="L611" title="All 2 branches covered.">		if (passwordEncoder.matches(newPassword, credential.getPasswordHash())) {</span>
+<span class="fc" id="L612">			return ChangePasswordResponse.ofFailure(&quot;New password cannot be the same as the current password&quot;);</span>
+		}
+
+<span class="fc" id="L615">		credential.setPasswordHash(passwordEncoder.encode(newPassword));</span>
+<span class="fc" id="L616">		credential.setPasswordChangedAt(now);</span>
+<span class="fc" id="L617">		credential.setPasswordExpiresAt(now.plusDays(365));</span>
+<span class="fc" id="L618">		credential.setMustChange(&quot;N&quot;);</span>
+<span class="fc" id="L619">		credential.setFailedAttempts(0);</span>
+<span class="fc" id="L620">		credential.setFirstFailedAt(null);</span>
+<span class="fc" id="L621">		credential.setLockedUntil(null);</span>
+<span class="fc" id="L622">		userCredentialRepository.save(credential);</span>
+
+<span class="fc" id="L624">		log.info(&quot;Password successfully changed for user [{}]&quot;, userId);</span>
+<span class="fc" id="L625">		return ChangePasswordResponse.ofSuccess(&quot;Password changed successfully&quot;);</span>
+	}
+
+	@Override
+	public ResponseEntity&lt;Object&gt; logout(HttpServletRequest request) {
+<span class="fc" id="L630">		String userId = resolveCurrentUserId(request);</span>
+<span class="fc" id="L631">		log.info(&quot;Processing logout for user: {}&quot;, userId);</span>
+
+<span class="fc" id="L633">		recordLogoutActivity(userId, request);</span>
+
+<span class="fc bfc" id="L635" title="All 2 branches covered.">		if (request != null) {</span>
+<span class="fc" id="L636">			HttpSession session = request.getSession(false);</span>
+<span class="fc bfc" id="L637" title="All 2 branches covered.">			if (session != null) {</span>
+<span class="fc" id="L638">				session.invalidate();</span>
+			}
+		}
+
+<span class="fc" id="L642">		SecurityContextHolder.clearContext();</span>
+
+<span class="fc" id="L644">		HttpHeaders headers = buildLogoutHeaders();</span>
+
+<span class="fc" id="L646">		Map&lt;String, Object&gt; responseBody = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L647">		responseBody.put(MESSAGE, &quot;Logout successful&quot;);</span>
+<span class="fc bfc" id="L648" title="All 2 branches covered.">		if (userId != null) {</span>
+<span class="fc" id="L649">			responseBody.put(USER_ID, userId);</span>
+		}
+
+<span class="fc" id="L652">		return ResponseEntity.ok()</span>
+<span class="fc" id="L653">				.headers(headers)</span>
+<span class="fc" id="L654">				.body(responseBody);</span>
+	}
+
+	private void recordLogoutActivity(String userId, HttpServletRequest request) {
+<span class="pc bpc" id="L658" title="1 of 2 branches missed.">		if (userActivityTrackingService != null) {</span>
+			try {
+<span class="fc" id="L660">				UserActivityTrackingVO vo = new UserActivityTrackingVO();</span>
+<span class="fc bfc" id="L661" title="All 2 branches covered.">				vo.setActorUserId(userId != null ? userId : &quot;ANONYMOUS&quot;);</span>
+<span class="fc" id="L662">				vo.setEventType(&quot;LOGOUT&quot;);</span>
+<span class="fc" id="L663">				vo.setResourceType(&quot;AUTH&quot;);</span>
+<span class="fc bfc" id="L664" title="All 2 branches covered.">				vo.setResourceId(userId != null ? userId : &quot;N/A&quot;);</span>
+<span class="fc" id="L665">				vo.setDetail(&quot;User logged out successfully&quot;);</span>
+<span class="fc" id="L666">				userActivityTrackingService.saveUserActivity(vo, request);</span>
+<span class="nc" id="L667">			} catch (Exception e) {</span>
+<span class="nc" id="L668">				log.warn(&quot;Failed to record logout user activity: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L669">			}</span>
+		}
+<span class="fc" id="L671">	}</span>
+
+	private HttpHeaders buildLogoutHeaders() {
+<span class="fc" id="L674">		ResponseCookie accessCookie = ResponseCookie.from(APIConstants.ACCESS_TOKEN_COOKIE, &quot;&quot;)</span>
+<span class="fc" id="L675">				.httpOnly(true).secure(cookieSecure).path(&quot;/&quot;).maxAge(0).sameSite(SAME_SITE_STRICT).build();</span>
+<span class="fc" id="L676">		ResponseCookie authCookie = ResponseCookie.from(&quot;AUTH_TOKEN&quot;, &quot;&quot;)</span>
+<span class="fc" id="L677">				.httpOnly(true).secure(cookieSecure).path(&quot;/&quot;).maxAge(0).sameSite(SAME_SITE_STRICT).build();</span>
+<span class="fc" id="L678">		ResponseCookie refreshCookie = ResponseCookie.from(APIConstants.REFRESH_TOKEN_COOKIE, &quot;&quot;)</span>
+<span class="fc" id="L679">				.httpOnly(true).secure(cookieSecure).path(&quot;/&quot;).maxAge(0).sameSite(SAME_SITE_STRICT).build();</span>
+
+<span class="fc" id="L681">		HttpHeaders headers = new HttpHeaders();</span>
+<span class="fc" id="L682">		headers.add(HttpHeaders.SET_COOKIE, accessCookie.toString());</span>
+<span class="fc" id="L683">		headers.add(HttpHeaders.SET_COOKIE, authCookie.toString());</span>
+<span class="fc" id="L684">		headers.add(HttpHeaders.SET_COOKIE, refreshCookie.toString());</span>
+<span class="fc" id="L685">		return headers;</span>
+	}
+
+	private String resolveCurrentUserId(HttpServletRequest request) {
+<span class="fc" id="L689">		String userId = null;</span>
+<span class="fc bfc" id="L690" title="All 2 branches covered.">		if (request != null) {</span>
+			try {
+<span class="fc" id="L692">				userId = jwtUtils.getUserId(request);</span>
+<span class="nc" id="L693">			} catch (Exception ex) {</span>
+				// Fallback to SecurityContext
+<span class="fc" id="L695">			}</span>
+		}
+<span class="pc bpc" id="L697" title="1 of 4 branches missed.">		if (userId == null || userId.isBlank()) {</span>
+			try {
+<span class="fc" id="L699">				var auth = SecurityContextHolder.getContext().getAuthentication();</span>
+<span class="pc bpc" id="L700" title="2 of 6 branches missed.">				if (auth != null &amp;&amp; auth.isAuthenticated() &amp;&amp; !ANONYMOUS_USER.equalsIgnoreCase(auth.getName())) {</span>
+<span class="fc" id="L701">					userId = auth.getName();</span>
+				}
+<span class="nc" id="L703">			} catch (Exception ex) {</span>
+				// unauthenticated
+<span class="fc" id="L705">			}</span>
+		}
+<span class="pc bpc" id="L707" title="2 of 6 branches missed.">		return (userId != null &amp;&amp; !userId.isBlank() &amp;&amp; !ANONYMOUS_USER.equalsIgnoreCase(userId)) ? userId : null;</span>
+	}
+
+	@Override
+	public ResponseEntity&lt;Object&gt; getCurrentUserSession(HttpServletRequest request) {
+<span class="fc" id="L712">		String userId = resolveCurrentUserId(request);</span>
+<span class="fc bfc" id="L713" title="All 2 branches covered.">		if (userId == null) {</span>
+<span class="fc" id="L714">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED)</span>
+<span class="fc" id="L715">					.body(Map.of(AUTHENTICATED, false, MESSAGE, &quot;No active session&quot;));</span>
+		}
+
+<span class="fc" id="L718">		UsersEntityV2 userEntity = usersRepositoryV2.findByUserId(userId);</span>
+<span class="pc bpc" id="L719" title="1 of 2 branches missed.">		if (userEntity == null) {</span>
+<span class="nc" id="L720">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED)</span>
+<span class="nc" id="L721">					.body(Map.of(AUTHENTICATED, false, MESSAGE, &quot;User not found&quot;));</span>
+		}
+
+<span class="pc bpc" id="L724" title="1 of 4 branches missed.">		if (userEntity.getStatus() != null &amp;&amp; !&quot;ACTIVE&quot;.equalsIgnoreCase(userEntity.getStatus())) {</span>
+<span class="fc" id="L725">			return ResponseEntity.status(HttpStatus.UNAUTHORIZED)</span>
+<span class="fc" id="L726">					.body(Map.of(AUTHENTICATED, false, MESSAGE, &quot;User account is suspended or inactive&quot;));</span>
+		}
+
+<span class="fc" id="L729">		String userRole = resolveUserRole(userEntity);</span>
+<span class="fc" id="L730">		Map&lt;String, Object&gt; session = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L731">		session.put(AUTHENTICATED, true);</span>
+<span class="fc" id="L732">		session.put(USER_ID, userEntity.getUserId());</span>
+<span class="fc" id="L733">		session.put(&quot;userSerialNumber&quot;, userEntity.getSerialNumber());</span>
+<span class="pc bpc" id="L734" title="1 of 2 branches missed.">		String displayName = userEntity.getDisplayName() != null ? userEntity.getDisplayName() : userEntity.getUserId();</span>
+<span class="fc" id="L735">		session.put(&quot;userName&quot;, displayName);</span>
+<span class="fc" id="L736">		session.put(&quot;name&quot;, displayName);</span>
+<span class="fc" id="L737">		session.put(&quot;email&quot;, userEntity.getEmail());</span>
+<span class="fc" id="L738">		session.put(&quot;userEmail&quot;, userEntity.getEmail());</span>
+<span class="fc" id="L739">		session.put(&quot;status&quot;, userEntity.getStatus());</span>
+<span class="pc bpc" id="L740" title="1 of 2 branches missed.">		if (userRole != null) {</span>
+<span class="nc" id="L741">			session.put(&quot;role&quot;, userRole);</span>
+<span class="nc" id="L742">			session.put(&quot;userRole&quot;, userRole);</span>
+		}
+
+		// Note: token and accessToken are intentionally omitted from response body (Finding S5).
+		// Authentication is maintained securely via HttpOnly session cookies.
+<span class="fc" id="L747">		return ResponseEntity.ok(session);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

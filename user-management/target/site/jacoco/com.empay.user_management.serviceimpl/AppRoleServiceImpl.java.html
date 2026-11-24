@@ -1,0 +1,978 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppRoleServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.serviceimpl</a> &gt; <span class="el_source">AppRoleServiceImpl.java</span></div><h1>AppRoleServiceImpl.java</h1><pre class="source lang-java linenums">package com.empay.user_management.serviceimpl;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import com.empay.user_management.dto.RolePermissionsResponse;
+
+import com.empay.user_management.repository.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+
+import com.empay.user_management.dto.BulkRolePermissionSummary;
+import com.empay.user_management.dto.BulkRolePermissionsRequest;
+import com.empay.user_management.dto.ConflictCheckRequest;
+import com.empay.user_management.dto.ConflictCheckResponse;
+import com.empay.user_management.dto.CreatePermissionConflictRequest;
+import com.empay.user_management.dto.CreateRoleRequest;
+import com.empay.user_management.dto.PermissionResponse;
+import com.empay.user_management.dto.RolePermissionAssignment;
+import com.empay.user_management.dto.RolePermissionHistoryPageResponse;
+import com.empay.user_management.dto.RolePermissionHistoryResponse;
+import com.empay.user_management.dto.RolePermissionPair;
+import com.empay.user_management.dto.RolePermissionRequest;
+import com.empay.user_management.dto.RoleResponse;
+import com.empay.user_management.dto.RolesAndPermissionsResponse;
+import com.empay.user_management.dto.SodConflictDetail;
+import com.empay.user_management.dto.UpdateRoleRequest;
+import com.empay.user_management.entities.AppRoleEntity;
+import com.empay.user_management.entities.PermissionConflictEntity;
+import com.empay.user_management.entities.RoleConflictEntity;
+import com.empay.user_management.entities.RolePermissionEntity;
+import com.empay.user_management.entities.RolePermissionHistoryEntity;
+import com.empay.user_management.entities.RolePermissionId;
+import com.empay.user_management.exceptions.ResourceAlreadyExistsException;
+import com.empay.user_management.exceptions.ResourceNotFoundException;
+import com.empay.user_management.exceptions.SodConflictException;
+import com.empay.user_management.service.AppRoleService;
+import com.empay.user_management.utils.JwtUtils;
+
+import jakarta.persistence.criteria.Predicate;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.log4j.Log4j2;
+
+@Service
+@Transactional(readOnly = true)
+<span class="fc" id="L60">@Log4j2</span>
+public class AppRoleServiceImpl implements AppRoleService {
+
+	private static final String ROLE_RESOURCE = &quot;APP_ROLE&quot;;
+	private static final String PERMISSION_RESOURCE = &quot;PERMISSION&quot;;
+	private static final String ROLE_PERMISSION_RESOURCE = &quot;ROLE_PERMISSION&quot;;
+	private static final String DEFAULT_USER = &quot;SYSTEM&quot;;
+	private static final String ROLE_CODE_FIELD = &quot;roleCode&quot;;
+	private static final String ROLE_NOT_FOUND_PREFIX = &quot;Role not found with code: &quot;;
+	private static final String PERMISSION_CODE_FIELD = &quot;permissionCode&quot;;
+	private static final String PERMISSION_NOT_FOUND_PREFIX = &quot;Permission not found with code: &quot;;
+	private static final String SEVERITY_BLOCK = &quot;BLOCK&quot;;
+	private static final String SEVERITY_WARN = &quot;WARN&quot;;
+	private static final String ACTION_ADDED = &quot;ADDED&quot;;
+	private static final String ACTION_REMOVED = &quot;REMOVED&quot;;
+<span class="fc" id="L75">	private static final ZoneId DEFAULT_ZONE = ZoneId.systemDefault();</span>
+
+	private final AppRoleRepository appRoleRepository;
+	private final PermissionRepository permissionRepository;
+	private final RolePermissionRepository rolePermissionRepository;
+	private final RoleConflictRepository roleConflictRepository;
+	private final PermissionConflictRepository permissionConflictRepository;
+	private final RolePermissionHistoryRepository rolePermissionHistoryRepository;
+	private final JwtUtils jwtUtils;
+	private final UserRoleRepositoryV2 userRoleRepositoryV2;
+
+	public AppRoleServiceImpl(
+            AppRoleRepository appRoleRepository,
+            PermissionRepository permissionRepository,
+            RolePermissionRepository rolePermissionRepository,
+            RoleConflictRepository roleConflictRepository,
+            PermissionConflictRepository permissionConflictRepository,
+            RolePermissionHistoryRepository rolePermissionHistoryRepository,
+<span class="fc" id="L93">            JwtUtils jwtUtils, UserRoleRepositoryV2 userRoleRepositoryV2) {</span>
+<span class="fc" id="L94">		this.appRoleRepository = appRoleRepository;</span>
+<span class="fc" id="L95">		this.permissionRepository = permissionRepository;</span>
+<span class="fc" id="L96">		this.rolePermissionRepository = rolePermissionRepository;</span>
+<span class="fc" id="L97">		this.roleConflictRepository = roleConflictRepository;</span>
+<span class="fc" id="L98">		this.permissionConflictRepository = permissionConflictRepository;</span>
+<span class="fc" id="L99">		this.rolePermissionHistoryRepository = rolePermissionHistoryRepository;</span>
+<span class="fc" id="L100">		this.jwtUtils = jwtUtils;</span>
+<span class="fc" id="L101">        this.userRoleRepositoryV2 = userRoleRepositoryV2;</span>
+<span class="fc" id="L102">    }</span>
+
+	private ResourceNotFoundException roleNotFound(String roleCode) {
+<span class="fc" id="L105">		return new ResourceNotFoundException(ROLE_RESOURCE, ROLE_CODE_FIELD, ROLE_NOT_FOUND_PREFIX + roleCode);</span>
+	}
+
+	private ResourceNotFoundException permissionNotFound(String permissionCode) {
+<span class="fc" id="L109">		return new ResourceNotFoundException(PERMISSION_RESOURCE, PERMISSION_CODE_FIELD, PERMISSION_NOT_FOUND_PREFIX + permissionCode);</span>
+	}
+
+	@Override
+	public List&lt;RoleResponse&gt; getAllRoles() {
+<span class="fc" id="L114">		log.info(&quot;Fetching all application roles&quot;);</span>
+<span class="fc" id="L115">		return appRoleRepository.findAllByOrderByRoleCodeAsc()</span>
+<span class="fc" id="L116">			.stream()</span>
+<span class="fc" id="L117">			.map(RoleResponse::fromEntity)</span>
+<span class="fc" id="L118">			.toList();</span>
+	}
+
+	@Override
+	public RoleResponse getRoleByCode(String roleCode) {
+<span class="fc" id="L123">		log.info(&quot;Fetching role details for role code: {}&quot;, roleCode);</span>
+<span class="pc bpc" id="L124" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L125">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="fc" id="L128">		return appRoleRepository.findByRoleCode(roleCode)</span>
+<span class="fc" id="L129">			.map(RoleResponse::fromEntity)</span>
+<span class="fc" id="L130">			.orElseThrow(() -&gt; roleNotFound(roleCode));</span>
+	}
+
+	@Override
+	public List&lt;PermissionResponse&gt; getPermissionsForRole(String roleCode) {
+<span class="fc" id="L135">		log.info(&quot;Fetching permissions attached to role code: {}&quot;, roleCode);</span>
+<span class="pc bpc" id="L136" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L137">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="fc bfc" id="L140" title="All 2 branches covered.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L141">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L144">		return permissionRepository.findPermissionsByRoleCode(roleCode)</span>
+<span class="fc" id="L145">			.stream()</span>
+<span class="fc" id="L146">			.map(PermissionResponse::fromEntity)</span>
+<span class="fc" id="L147">			.toList();</span>
+	}
+
+	@Override
+	public List&lt;RolePermissionsResponse&gt; getBulkRolePermissions(List&lt;String&gt; roleCodes) {
+<span class="fc" id="L152">		log.info(&quot;Fetching bulk role permissions for roleCodes: {}&quot;, roleCodes);</span>
+
+		List&lt;AppRoleEntity&gt; roles;
+<span class="pc bpc" id="L155" title="1 of 4 branches missed.">		if (roleCodes != null &amp;&amp; !roleCodes.isEmpty()) {</span>
+<span class="fc" id="L156">			List&lt;String&gt; cleanedRoleCodes = roleCodes.stream()</span>
+<span class="pc bpc" id="L157" title="2 of 4 branches missed.">				.filter(code -&gt; code != null &amp;&amp; !code.isBlank())</span>
+<span class="fc" id="L158">				.map(String::trim)</span>
+<span class="fc" id="L159">				.distinct()</span>
+<span class="fc" id="L160">				.toList();</span>
+<span class="fc" id="L161">			roles = appRoleRepository.findByRoleCodeInOrderByRoleCodeAsc(cleanedRoleCodes);</span>
+<span class="fc" id="L162">		} else {</span>
+<span class="fc" id="L163">			roles = appRoleRepository.findAllByOrderByRoleCodeAsc();</span>
+		}
+
+<span class="fc bfc" id="L166" title="All 2 branches covered.">		if (roles.isEmpty()) {</span>
+<span class="fc" id="L167">			return List.of();</span>
+		}
+
+<span class="fc" id="L170">		List&lt;String&gt; effectiveRoleCodes = roles.stream().map(AppRoleEntity::getRoleCode).toList();</span>
+<span class="fc" id="L171">		List&lt;RolePermissionEntity&gt; assignments = rolePermissionRepository.findAssignmentsByRoleCodes(effectiveRoleCodes);</span>
+
+<span class="fc" id="L173">		Map&lt;String, List&lt;String&gt;&gt; permissionCodesByRole = assignments.stream()</span>
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">			.filter(a -&gt; a.getPermission() != null)</span>
+<span class="fc" id="L175">			.collect(Collectors.groupingBy(</span>
+<span class="fc" id="L176">				a -&gt; a.getId().getRoleCode(),</span>
+				LinkedHashMap::new,
+<span class="fc" id="L178">				Collectors.mapping(a -&gt; a.getPermission().getPermissionCode(), Collectors.toList())</span>
+			));
+
+<span class="fc" id="L181">		return roles.stream()</span>
+<span class="fc" id="L182">			.map(role -&gt; {</span>
+<span class="fc" id="L183">				List&lt;String&gt; permCodes = permissionCodesByRole.getOrDefault(role.getRoleCode(), List.of());</span>
+<span class="fc" id="L184">				return new RolePermissionsResponse(</span>
+<span class="fc" id="L185">					role.getRoleCode(),</span>
+<span class="fc" id="L186">					role.getName(),</span>
+<span class="fc" id="L187">					role.getDescription(),</span>
+<span class="fc" id="L188">					role.isSystemRole(),</span>
+					permCodes
+				);
+			})
+<span class="fc" id="L192">			.toList();</span>
+	}
+
+	@Override
+	public RolesAndPermissionsResponse getRolesAndPermissions() {
+<span class="fc" id="L197">		log.info(&quot;Fetching bootstrap payload containing all roles and all permissions&quot;);</span>
+<span class="fc" id="L198">		var roles = appRoleRepository.findAllByOrderByRoleCodeAsc()</span>
+<span class="fc" id="L199">			.stream()</span>
+<span class="fc" id="L200">			.map(RoleResponse::fromEntity)</span>
+<span class="fc" id="L201">			.toList();</span>
+
+<span class="fc" id="L203">		var permissions = permissionRepository.findAllByOrderByModuleAscResourceAscActionNameAsc()</span>
+<span class="fc" id="L204">			.stream()</span>
+<span class="fc" id="L205">			.map(PermissionResponse::fromEntity)</span>
+<span class="fc" id="L206">			.toList();</span>
+
+<span class="fc" id="L208">		return new RolesAndPermissionsResponse(roles, permissions);</span>
+	}
+
+	@Override
+	@Transactional
+	public RoleResponse createRole(CreateRoleRequest request, HttpServletRequest httpRequest) {
+<span class="fc" id="L214">		String roleCode = request.roleCode().trim();</span>
+<span class="fc" id="L215">		log.info(&quot;Creating new role: {}&quot;, roleCode);</span>
+
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">		if (appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="nc" id="L218">			throw new ResourceAlreadyExistsException(ROLE_RESOURCE, ROLE_CODE_FIELD, &quot;Role already exists with code: &quot; + roleCode);</span>
+		}
+
+<span class="fc" id="L221">		String roleName = request.effectiveName().trim();</span>
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">		if (roleName.isBlank()) {</span>
+<span class="nc" id="L223">			throw new IllegalArgumentException(&quot;Role name is mandatory&quot;);</span>
+		}
+
+<span class="fc" id="L226">		List&lt;String&gt; permissionCodes = request.effectivePermissionCodes();</span>
+<span class="fc bfc" id="L227" title="All 2 branches covered.">		if (!permissionCodes.isEmpty()) {</span>
+<span class="nc" id="L228">			validateRolePermissionsOnCreate(permissionCodes);</span>
+		}
+
+<span class="fc" id="L231">		String createdBy = resolveGrantedBy(null, httpRequest);</span>
+<span class="fc" id="L232">		AppRoleEntity role = AppRoleEntity.builder()</span>
+<span class="fc" id="L233">			.roleCode(roleCode)</span>
+<span class="fc" id="L234">			.name(roleName)</span>
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">			.description(request.description() != null ? request.description().trim() : null)</span>
+<span class="fc" id="L236">			.isSystem(&quot;N&quot;)</span>
+<span class="fc" id="L237">			.createdBy(createdBy)</span>
+<span class="fc" id="L238">			.createdAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L239">			.build();</span>
+
+<span class="fc" id="L241">		AppRoleEntity saved = appRoleRepository.save(role);</span>
+
+<span class="fc" id="L243">		saveInitialRolePermissions(roleCode, permissionCodes, createdBy);</span>
+
+<span class="fc" id="L245">		return RoleResponse.fromEntity(saved);</span>
+	}
+
+	private void validateRolePermissionsOnCreate(List&lt;String&gt; permissionCodes) {
+<span class="fc" id="L249">		Set&lt;String&gt; payloadCodes = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L250" title="All 2 branches covered.">		for (String code : permissionCodes) {</span>
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">			if (!payloadCodes.add(code)) {</span>
+<span class="nc" id="L252">				throw new ResourceAlreadyExistsException(</span>
+					ROLE_PERMISSION_RESOURCE,
+					PERMISSION_CODE_FIELD,
+					&quot;Duplicate permission code '&quot; + code + &quot;' in request payload&quot;
+				);
+			}
+<span class="pc bpc" id="L258" title="1 of 2 branches missed.">			if (!permissionRepository.existsByPermissionCode(code)) {</span>
+<span class="nc" id="L259">				throw permissionNotFound(code);</span>
+			}
+<span class="fc" id="L261">		}</span>
+<span class="fc" id="L262">		List&lt;SodConflictDetail&gt; conflicts = detectConflicts(payloadCodes);</span>
+<span class="nc" id="L263">		validateNoBlockingConflicts(conflicts);</span>
+<span class="nc" id="L264">	}</span>
+
+	private void recordHistory(String roleCode, String permissionCode, String actionTaken, String changedBy) {
+<span class="fc" id="L267">		var historyEntity = RolePermissionHistoryEntity.builder()</span>
+<span class="fc" id="L268">			.roleCode(roleCode)</span>
+<span class="fc" id="L269">			.permissionCode(permissionCode)</span>
+<span class="fc" id="L270">			.actionTaken(actionTaken)</span>
+<span class="fc" id="L271">			.changedBy(changedBy)</span>
+<span class="fc" id="L272">			.changedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L273">			.build();</span>
+<span class="fc" id="L274">		rolePermissionHistoryRepository.save(historyEntity);</span>
+<span class="fc" id="L275">	}</span>
+
+	private void saveInitialRolePermissions(String roleCode, List&lt;String&gt; permissionCodes, String createdBy) {
+<span class="pc bpc" id="L278" title="2 of 4 branches missed.">		if (permissionCodes != null &amp;&amp; !permissionCodes.isEmpty()) {</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">			for (String code : permissionCodes) {</span>
+<span class="nc" id="L280">				var assignment = RolePermissionEntity.builder()</span>
+<span class="nc" id="L281">					.id(new RolePermissionId(roleCode, code))</span>
+<span class="nc" id="L282">					.grantedBy(createdBy)</span>
+<span class="nc" id="L283">					.grantedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="nc" id="L284">					.build();</span>
+<span class="nc" id="L285">				rolePermissionRepository.save(assignment);</span>
+<span class="nc" id="L286">				recordHistory(roleCode, code, ACTION_ADDED, createdBy);</span>
+<span class="nc" id="L287">			}</span>
+		}
+<span class="fc" id="L289">	}</span>
+
+	@Override
+	@Transactional
+	public RoleResponse updateRole(String roleCode, UpdateRoleRequest request, HttpServletRequest httpRequest) {
+<span class="fc" id="L294">		log.info(&quot;Updating role details for role code: {}&quot;, roleCode);</span>
+<span class="pc bpc" id="L295" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L296">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="fc" id="L299">		var role = appRoleRepository.findByRoleCode(roleCode)</span>
+<span class="pc" id="L300">			.orElseThrow(() -&gt; roleNotFound(roleCode));</span>
+
+<span class="fc" id="L302">		role.setName(request.name().trim());</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">		if (request.description() != null) {</span>
+<span class="fc" id="L304">			role.setDescription(request.description().trim());</span>
+		}
+
+<span class="fc" id="L307">		AppRoleEntity saved = appRoleRepository.save(role);</span>
+<span class="fc" id="L308">		return RoleResponse.fromEntity(saved);</span>
+	}
+
+	@Override
+	@Transactional
+	public List&lt;PermissionResponse&gt; assignPermissionsToRole(RolePermissionRequest request, HttpServletRequest httpRequest) {
+<span class="fc" id="L314">		String roleCode = request.roleCode();</span>
+<span class="fc" id="L315">		log.info(&quot;Assigning permissions to role: {}&quot;, roleCode);</span>
+
+<span class="pc bpc" id="L317" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L318">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="pc bpc" id="L321" title="2 of 4 branches missed.">		if (request.permissionCodes() == null || request.permissionCodes().isEmpty()) {</span>
+<span class="nc" id="L322">			throw new IllegalArgumentException(&quot;Permission codes list must not be empty&quot;);</span>
+		}
+
+<span class="pc bpc" id="L325" title="1 of 2 branches missed.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="nc" id="L326">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L329">		String grantedBy = resolveGrantedBy(request.grantedBy(), httpRequest);</span>
+
+<span class="fc" id="L331">		Set&lt;String&gt; payloadCodes = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L332" title="All 2 branches covered.">		for (String permissionCode : request.permissionCodes()) {</span>
+<span class="fc bfc" id="L333" title="All 2 branches covered.">			if (!payloadCodes.add(permissionCode)) {</span>
+<span class="fc" id="L334">				throw new ResourceAlreadyExistsException(</span>
+					ROLE_PERMISSION_RESOURCE,
+					PERMISSION_CODE_FIELD,
+					&quot;Duplicate permission code '&quot; + permissionCode + &quot;' in request payload&quot;
+				);
+			}
+<span class="fc" id="L340">		}</span>
+
+<span class="fc bfc" id="L342" title="All 2 branches covered.">		for (String permissionCode : request.permissionCodes()) {</span>
+<span class="pc bpc" id="L343" title="1 of 2 branches missed.">			if (!permissionRepository.existsByPermissionCode(permissionCode)) {</span>
+<span class="nc" id="L344">				throw permissionNotFound(permissionCode);</span>
+			}
+
+<span class="fc bfc" id="L347" title="All 2 branches covered.">			if (rolePermissionRepository.existsByIdRoleCodeAndIdPermissionCode(roleCode, permissionCode)) {</span>
+<span class="fc" id="L348">				throw new ResourceAlreadyExistsException(</span>
+					ROLE_PERMISSION_RESOURCE,
+					PERMISSION_CODE_FIELD,
+					&quot;Permission '&quot; + permissionCode + &quot;' is already assigned to role '&quot; + roleCode + &quot;'&quot;
+				);
+			}
+<span class="fc" id="L354">		}</span>
+
+		// Calculate resulting permissions and check SoD conflicts (PERMISSION_CONFLICT &amp; ROLE_CONFLICT)
+<span class="fc" id="L357">		Set&lt;String&gt; resultingCodes = new HashSet&lt;&gt;(rolePermissionRepository.findAssignedPermissionCodesByRoleCode(roleCode));</span>
+<span class="fc" id="L358">		resultingCodes.addAll(request.permissionCodes());</span>
+
+<span class="fc" id="L360">		List&lt;SodConflictDetail&gt; conflicts = detectConflicts(resultingCodes);</span>
+<span class="fc" id="L361">		validateNoBlockingConflicts(conflicts);</span>
+
+<span class="fc bfc" id="L363" title="All 2 branches covered.">		for (String permissionCode : request.permissionCodes()) {</span>
+<span class="fc" id="L364">			var assignment = RolePermissionEntity.builder()</span>
+<span class="fc" id="L365">				.id(new RolePermissionId(roleCode, permissionCode))</span>
+<span class="fc" id="L366">				.grantedBy(grantedBy)</span>
+<span class="fc" id="L367">				.grantedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L368">				.build();</span>
+<span class="fc" id="L369">			rolePermissionRepository.save(assignment);</span>
+<span class="fc" id="L370">			recordHistory(roleCode, permissionCode, ACTION_ADDED, grantedBy);</span>
+<span class="fc" id="L371">		}</span>
+
+<span class="fc" id="L373">		return getPermissionsForRole(roleCode);</span>
+	}
+
+	@Override
+	@Transactional
+	public List&lt;PermissionResponse&gt; updateRolePermissions(String roleCode, List&lt;String&gt; permissionCodes, HttpServletRequest httpRequest) {
+<span class="fc" id="L379">		log.info(&quot;Updating all permissions for role: {}&quot;, roleCode);</span>
+
+<span class="pc bpc" id="L381" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L382">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="pc bpc" id="L385" title="1 of 2 branches missed.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="nc" id="L386">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L389">		Set&lt;String&gt; targetSet = validateTargetPermissionCodes(roleCode, permissionCodes);</span>
+<span class="fc" id="L390">		List&lt;SodConflictDetail&gt; conflicts = detectConflicts(targetSet);</span>
+<span class="fc" id="L391">		validateNoBlockingConflicts(conflicts);</span>
+
+<span class="fc" id="L393">		Set&lt;String&gt; currentCodes = rolePermissionRepository.findAssignedPermissionCodesByRoleCode(roleCode);</span>
+<span class="fc" id="L394">		String grantedBy = resolveGrantedBy(null, httpRequest);</span>
+
+		// Remove unselected permissions
+<span class="fc" id="L397">		List&lt;String&gt; toRemove = currentCodes.stream()</span>
+<span class="fc bfc" id="L398" title="All 2 branches covered.">			.filter(code -&gt; !targetSet.contains(code))</span>
+<span class="fc" id="L399">			.toList();</span>
+
+<span class="fc bfc" id="L401" title="All 2 branches covered.">		if (!toRemove.isEmpty()) {</span>
+<span class="fc" id="L402">			rolePermissionRepository.deleteByRoleCodeAndPermissionCodes(roleCode, toRemove);</span>
+<span class="fc bfc" id="L403" title="All 2 branches covered.">			for (String code : toRemove) {</span>
+<span class="fc" id="L404">				recordHistory(roleCode, code, ACTION_REMOVED, grantedBy);</span>
+<span class="fc" id="L405">			}</span>
+		}
+
+		// Add new selected permissions
+<span class="fc" id="L409">		List&lt;String&gt; toAdd = targetSet.stream()</span>
+<span class="fc bfc" id="L410" title="All 2 branches covered.">			.filter(code -&gt; !currentCodes.contains(code))</span>
+<span class="fc" id="L411">			.toList();</span>
+
+<span class="fc bfc" id="L413" title="All 2 branches covered.">		for (String newPermissionCode : toAdd) {</span>
+<span class="fc" id="L414">			var assignment = RolePermissionEntity.builder()</span>
+<span class="fc" id="L415">				.id(new RolePermissionId(roleCode, newPermissionCode))</span>
+<span class="fc" id="L416">				.grantedBy(grantedBy)</span>
+<span class="fc" id="L417">				.grantedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L418">				.build();</span>
+<span class="fc" id="L419">			rolePermissionRepository.save(assignment);</span>
+<span class="fc" id="L420">			recordHistory(roleCode, newPermissionCode, ACTION_ADDED, grantedBy);</span>
+<span class="fc" id="L421">		}</span>
+
+<span class="fc" id="L423">		return getPermissionsForRole(roleCode);</span>
+	}
+
+	@Override
+	@Transactional
+	public BulkRolePermissionSummary bulkConfigureRolePermissions(BulkRolePermissionsRequest request, HttpServletRequest httpRequest) {
+<span class="fc" id="L429">		log.info(&quot;Executing bulk role permission configuration&quot;);</span>
+
+<span class="pc bpc" id="L431" title="1 of 4 branches missed.">		if (request == null || request.isEmpty()) {</span>
+<span class="fc" id="L432">			throw new IllegalArgumentException(&quot;Bulk role permission payload must contain roles, grants, revocations, or action items&quot;);</span>
+		}
+
+<span class="fc" id="L435">		List&lt;RolePermissionAssignment&gt; effectiveRoles = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L436">		List&lt;RolePermissionPair&gt; effectiveGrants = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L437">		List&lt;RolePermissionPair&gt; effectiveRevocations = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L439">		resolveBulkRequests(request, effectiveRoles, effectiveGrants, effectiveRevocations);</span>
+
+<span class="pc bpc" id="L441" title="1 of 6 branches missed.">		if (effectiveRoles.isEmpty() &amp;&amp; effectiveGrants.isEmpty() &amp;&amp; effectiveRevocations.isEmpty()) {</span>
+<span class="nc" id="L442">			throw new IllegalArgumentException(&quot;Bulk role permission payload must contain roles, grants, revocations, or action items&quot;);</span>
+		}
+
+<span class="fc" id="L445">		String grantedBy = resolveGrantedBy(null, httpRequest);</span>
+<span class="fc" id="L446">		Set&lt;String&gt; affectedRoleCodes = new HashSet&lt;&gt;();</span>
+
+<span class="fc" id="L448">		int[] matrixMetrics = processBulkMatrixRoles(effectiveRoles, grantedBy, affectedRoleCodes);</span>
+<span class="fc" id="L449">		int totalGranted = matrixMetrics[0] + processBulkGrants(effectiveGrants, grantedBy, affectedRoleCodes);</span>
+<span class="fc" id="L450">		int totalRevoked = matrixMetrics[1] + processBulkRevocations(effectiveRevocations, grantedBy, affectedRoleCodes);</span>
+
+<span class="fc" id="L452">		List&lt;RoleResponse&gt; updatedRoles = affectedRoleCodes.stream()</span>
+<span class="fc" id="L453">			.map(appRoleRepository::findByRoleCode)</span>
+<span class="fc" id="L454">			.flatMap(Optional::stream)</span>
+<span class="fc" id="L455">			.map(RoleResponse::fromEntity)</span>
+<span class="fc" id="L456">			.toList();</span>
+
+<span class="fc" id="L458">		String message = String.format(</span>
+			&quot;Bulk role permission configuration processed successfully. Granted: %d, Revoked: %d across %d roles.&quot;,
+<span class="fc" id="L460">			totalGranted, totalRevoked, affectedRoleCodes.size()</span>
+		);
+
+<span class="fc" id="L463">		return new BulkRolePermissionSummary(</span>
+<span class="fc" id="L464">			affectedRoleCodes.size(),</span>
+			totalGranted,
+			totalRevoked,
+			updatedRoles,
+			message
+		);
+	}
+
+	private void resolveBulkRequests(
+			BulkRolePermissionsRequest request,
+			List&lt;RolePermissionAssignment&gt; effectiveRoles,
+			List&lt;RolePermissionPair&gt; effectiveGrants,
+			List&lt;RolePermissionPair&gt; effectiveRevocations) {
+<span class="fc bfc" id="L477" title="All 2 branches covered.">		if (request.hasRoles()) {</span>
+<span class="fc" id="L478">			effectiveRoles.addAll(request.roles());</span>
+		}
+<span class="fc bfc" id="L480" title="All 2 branches covered.">		if (request.hasGrants()) {</span>
+<span class="fc" id="L481">			effectiveGrants.addAll(request.grants());</span>
+		}
+<span class="fc bfc" id="L483" title="All 2 branches covered.">		if (request.hasRevocations()) {</span>
+<span class="fc" id="L484">			effectiveRevocations.addAll(request.revocations());</span>
+		}
+
+<span class="fc bfc" id="L487" title="All 2 branches covered.">		if (request.hasAction()) {</span>
+<span class="fc" id="L488">			resolveActionBasedBulkRequests(request, effectiveRoles, effectiveGrants, effectiveRevocations);</span>
+		} else {
+<span class="fc" id="L490">			handleGrantAction(request, effectiveGrants);</span>
+		}
+<span class="fc" id="L492">	}</span>
+
+	private void resolveActionBasedBulkRequests(
+			BulkRolePermissionsRequest request,
+			List&lt;RolePermissionAssignment&gt; effectiveRoles,
+			List&lt;RolePermissionPair&gt; effectiveGrants,
+			List&lt;RolePermissionPair&gt; effectiveRevocations) {
+<span class="fc" id="L499">		String act = request.action().trim().toUpperCase();</span>
+<span class="fc bfc" id="L500" title="All 4 branches covered.">		switch (act) {</span>
+<span class="fc" id="L501">			case &quot;GRANT&quot; -&gt; handleGrantAction(request, effectiveGrants);</span>
+<span class="fc" id="L502">			case &quot;REVOKE&quot; -&gt; handleRevokeAction(request, effectiveRevocations);</span>
+<span class="fc" id="L503">			case &quot;SYNC&quot; -&gt; handleSyncAction(request, effectiveRoles);</span>
+<span class="fc" id="L504">			default -&gt; throw new IllegalArgumentException(&quot;Action must be either GRANT, REVOKE, or SYNC&quot;);</span>
+		}
+<span class="fc" id="L506">	}</span>
+
+	private void handleGrantAction(BulkRolePermissionsRequest request, List&lt;RolePermissionPair&gt; effectiveGrants) {
+<span class="fc bfc" id="L509" title="All 2 branches covered.">		if (request.hasSingleRoleAction()) {</span>
+<span class="fc bfc" id="L510" title="All 2 branches covered.">			for (String perm : request.permissionCodes()) {</span>
+<span class="fc" id="L511">				effectiveGrants.add(new RolePermissionPair(request.roleCode().trim(), perm.trim()));</span>
+<span class="fc" id="L512">			}</span>
+		}
+<span class="pc bpc" id="L514" title="1 of 2 branches missed.">		if (request.hasItems()) {</span>
+<span class="nc" id="L515">			effectiveGrants.addAll(request.items());</span>
+		}
+<span class="fc" id="L517">	}</span>
+
+	private void handleRevokeAction(BulkRolePermissionsRequest request, List&lt;RolePermissionPair&gt; effectiveRevocations) {
+<span class="pc bpc" id="L520" title="1 of 2 branches missed.">		if (request.hasSingleRoleAction()) {</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">			for (String perm : request.permissionCodes()) {</span>
+<span class="fc" id="L522">				effectiveRevocations.add(new RolePermissionPair(request.roleCode().trim(), perm.trim()));</span>
+<span class="fc" id="L523">			}</span>
+		}
+<span class="pc bpc" id="L525" title="1 of 2 branches missed.">		if (request.hasItems()) {</span>
+<span class="nc" id="L526">			effectiveRevocations.addAll(request.items());</span>
+		}
+<span class="fc" id="L528">	}</span>
+
+	private void handleSyncAction(BulkRolePermissionsRequest request, List&lt;RolePermissionAssignment&gt; effectiveRoles) {
+<span class="pc bpc" id="L531" title="1 of 2 branches missed.">		if (request.hasSingleRoleAction()) {</span>
+<span class="fc" id="L532">			effectiveRoles.add(new RolePermissionAssignment(request.roleCode().trim(), request.permissionCodes()));</span>
+		}
+<span class="fc" id="L534">	}</span>
+
+	private int[] processBulkMatrixRoles(
+			List&lt;RolePermissionAssignment&gt; effectiveRoles,
+			String grantedBy,
+			Set&lt;String&gt; affectedRoleCodes) {
+<span class="fc" id="L540">		int totalGranted = 0;</span>
+<span class="fc" id="L541">		int totalRevoked = 0;</span>
+<span class="fc bfc" id="L542" title="All 2 branches covered.">		for (RolePermissionAssignment assignment : effectiveRoles) {</span>
+<span class="fc" id="L543">			int[] singleResult = syncSingleRoleMatrix(assignment, grantedBy, affectedRoleCodes);</span>
+<span class="fc" id="L544">			totalGranted += singleResult[0];</span>
+<span class="fc" id="L545">			totalRevoked += singleResult[1];</span>
+<span class="fc" id="L546">		}</span>
+<span class="fc" id="L547">		return new int[] { totalGranted, totalRevoked };</span>
+	}
+
+	private int[] syncSingleRoleMatrix(
+			RolePermissionAssignment assignment,
+			String grantedBy,
+			Set&lt;String&gt; affectedRoleCodes) {
+<span class="pc bpc" id="L554" title="2 of 4 branches missed.">		if (assignment.roleCode() == null || assignment.roleCode().isBlank()) {</span>
+<span class="nc" id="L555">			throw new IllegalArgumentException(&quot;Role code in assignments must not be blank&quot;);</span>
+		}
+<span class="fc" id="L557">		String roleCode = assignment.roleCode().trim();</span>
+<span class="fc" id="L558">		affectedRoleCodes.add(roleCode);</span>
+
+<span class="fc bfc" id="L560" title="All 2 branches covered.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L561">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L564">		Set&lt;String&gt; targetSet = validateTargetPermissionCodes(roleCode, assignment.permissionCodes());</span>
+<span class="fc" id="L565">		List&lt;SodConflictDetail&gt; conflicts = detectConflicts(targetSet);</span>
+<span class="fc" id="L566">		validateNoBlockingConflicts(conflicts);</span>
+
+<span class="fc" id="L568">		Set&lt;String&gt; currentCodes = rolePermissionRepository.findAssignedPermissionCodesByRoleCode(roleCode);</span>
+
+<span class="fc" id="L570">		int revokedCount = 0;</span>
+<span class="fc" id="L571">		List&lt;String&gt; toRemove = currentCodes.stream()</span>
+<span class="pc bpc" id="L572" title="1 of 2 branches missed.">			.filter(c -&gt; !targetSet.contains(c))</span>
+<span class="fc" id="L573">			.toList();</span>
+<span class="fc bfc" id="L574" title="All 2 branches covered.">		if (!toRemove.isEmpty()) {</span>
+<span class="fc" id="L575">			rolePermissionRepository.deleteByRoleCodeAndPermissionCodes(roleCode, toRemove);</span>
+<span class="fc bfc" id="L576" title="All 2 branches covered.">			for (String code : toRemove) {</span>
+<span class="fc" id="L577">				recordHistory(roleCode, code, ACTION_REMOVED, grantedBy);</span>
+<span class="fc" id="L578">			}</span>
+<span class="fc" id="L579">			revokedCount = toRemove.size();</span>
+		}
+
+<span class="fc" id="L582">		int grantedCount = 0;</span>
+<span class="fc" id="L583">		List&lt;String&gt; toAdd = targetSet.stream()</span>
+<span class="pc bpc" id="L584" title="1 of 2 branches missed.">			.filter(c -&gt; !currentCodes.contains(c))</span>
+<span class="fc" id="L585">			.toList();</span>
+<span class="pc bpc" id="L586" title="1 of 2 branches missed.">		if (!toAdd.isEmpty()) {</span>
+<span class="fc" id="L587">			List&lt;RolePermissionEntity&gt; newEntities = toAdd.stream()</span>
+<span class="fc" id="L588">				.map(p -&gt; RolePermissionEntity.builder()</span>
+<span class="fc" id="L589">					.id(new RolePermissionId(roleCode, p))</span>
+<span class="fc" id="L590">					.grantedBy(grantedBy)</span>
+<span class="fc" id="L591">					.grantedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L592">					.build())</span>
+<span class="fc" id="L593">				.toList();</span>
+<span class="fc" id="L594">			rolePermissionRepository.saveAll(newEntities);</span>
+<span class="fc bfc" id="L595" title="All 2 branches covered.">			for (String code : toAdd) {</span>
+<span class="fc" id="L596">				recordHistory(roleCode, code, ACTION_ADDED, grantedBy);</span>
+<span class="fc" id="L597">			}</span>
+<span class="fc" id="L598">			grantedCount = toAdd.size();</span>
+		}
+
+<span class="fc" id="L601">		return new int[] { grantedCount, revokedCount };</span>
+	}
+
+	private Set&lt;String&gt; validateTargetPermissionCodes(String roleCode, List&lt;String&gt; permissionCodes) {
+<span class="pc bpc" id="L605" title="1 of 2 branches missed.">		List&lt;String&gt; targetCodes = (permissionCodes == null) ? List.of() : permissionCodes;</span>
+<span class="fc" id="L606">		Set&lt;String&gt; targetSet = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L607" title="All 2 branches covered.">		for (String code : targetCodes) {</span>
+<span class="pc bpc" id="L608" title="2 of 4 branches missed.">			if (code == null || code.isBlank()) {</span>
+<span class="nc" id="L609">				throw new IllegalArgumentException(&quot;Permission code must not be blank for role: &quot; + roleCode);</span>
+			}
+<span class="fc" id="L611">			String permCode = code.trim();</span>
+<span class="pc bpc" id="L612" title="1 of 2 branches missed.">			if (!targetSet.add(permCode)) {</span>
+<span class="nc" id="L613">				throw new ResourceAlreadyExistsException(</span>
+					ROLE_PERMISSION_RESOURCE,
+					PERMISSION_CODE_FIELD,
+					&quot;Duplicate permission code '&quot; + permCode + &quot;' in request payload&quot;
+				);
+			}
+<span class="pc bpc" id="L619" title="1 of 2 branches missed.">			if (!permissionRepository.existsByPermissionCode(permCode)) {</span>
+<span class="nc" id="L620">				throw permissionNotFound(permCode);</span>
+			}
+<span class="fc" id="L622">		}</span>
+<span class="fc" id="L623">		return targetSet;</span>
+	}
+
+	private int processBulkGrants(
+			List&lt;RolePermissionPair&gt; effectiveGrants,
+			String grantedBy,
+			Set&lt;String&gt; affectedRoleCodes) {
+<span class="fc" id="L630">		int totalGranted = 0;</span>
+<span class="fc bfc" id="L631" title="All 2 branches covered.">		for (RolePermissionPair pair : effectiveGrants) {</span>
+<span class="fc" id="L632">			String roleCode = pair.roleCode().trim();</span>
+<span class="fc" id="L633">			String permCode = pair.permissionCode().trim();</span>
+<span class="fc" id="L634">			affectedRoleCodes.add(roleCode);</span>
+
+<span class="pc bpc" id="L636" title="1 of 2 branches missed.">			if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="nc" id="L637">				throw roleNotFound(roleCode);</span>
+			}
+<span class="pc bpc" id="L639" title="1 of 2 branches missed.">			if (!permissionRepository.existsByPermissionCode(permCode)) {</span>
+<span class="nc" id="L640">				throw permissionNotFound(permCode);</span>
+			}
+
+<span class="pc bpc" id="L643" title="1 of 2 branches missed.">			if (!rolePermissionRepository.existsByIdRoleCodeAndIdPermissionCode(roleCode, permCode)) {</span>
+<span class="fc" id="L644">				Set&lt;String&gt; resulting = new HashSet&lt;&gt;(rolePermissionRepository.findAssignedPermissionCodesByRoleCode(roleCode));</span>
+<span class="fc" id="L645">				resulting.add(permCode);</span>
+
+<span class="fc" id="L647">				List&lt;SodConflictDetail&gt; conflicts = detectConflicts(resulting);</span>
+<span class="fc" id="L648">				validateNoBlockingConflicts(conflicts);</span>
+
+<span class="fc" id="L650">				var entity = RolePermissionEntity.builder()</span>
+<span class="fc" id="L651">					.id(new RolePermissionId(roleCode, permCode))</span>
+<span class="fc" id="L652">					.grantedBy(grantedBy)</span>
+<span class="fc" id="L653">					.grantedAt(LocalDateTime.now(DEFAULT_ZONE))</span>
+<span class="fc" id="L654">					.build();</span>
+<span class="fc" id="L655">				rolePermissionRepository.save(entity);</span>
+<span class="fc" id="L656">				recordHistory(roleCode, permCode, ACTION_ADDED, grantedBy);</span>
+<span class="fc" id="L657">				totalGranted++;</span>
+			}
+<span class="fc" id="L659">		}</span>
+<span class="fc" id="L660">		return totalGranted;</span>
+	}
+
+	private int processBulkRevocations(
+			List&lt;RolePermissionPair&gt; effectiveRevocations,
+			String changedBy,
+			Set&lt;String&gt; affectedRoleCodes) {
+<span class="fc" id="L667">		int totalRevoked = 0;</span>
+<span class="fc bfc" id="L668" title="All 2 branches covered.">		for (RolePermissionPair pair : effectiveRevocations) {</span>
+<span class="fc" id="L669">			String roleCode = pair.roleCode().trim();</span>
+<span class="fc" id="L670">			String permCode = pair.permissionCode().trim();</span>
+<span class="fc" id="L671">			affectedRoleCodes.add(roleCode);</span>
+
+<span class="pc bpc" id="L673" title="1 of 2 branches missed.">			if (rolePermissionRepository.existsByIdRoleCodeAndIdPermissionCode(roleCode, permCode)) {</span>
+<span class="fc" id="L674">				rolePermissionRepository.deleteById(new RolePermissionId(roleCode, permCode));</span>
+<span class="fc" id="L675">				recordHistory(roleCode, permCode, ACTION_REMOVED, changedBy);</span>
+<span class="fc" id="L676">				totalRevoked++;</span>
+			}
+<span class="fc" id="L678">		}</span>
+<span class="fc" id="L679">		return totalRevoked;</span>
+	}
+
+	@Override
+	public ConflictCheckResponse checkConflicts(ConflictCheckRequest request) {
+<span class="fc" id="L684">		String roleCode = request.roleCode();</span>
+<span class="fc" id="L685">		log.info(&quot;Evaluating SoD conflicts for role: {}&quot;, roleCode);</span>
+
+<span class="pc bpc" id="L687" title="3 of 6 branches missed.">		if (roleCode != null &amp;&amp; !roleCode.isBlank() &amp;&amp; !appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="nc" id="L688">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L691">		Set&lt;String&gt; permissionSet = new HashSet&lt;&gt;(request.permissionCodes());</span>
+<span class="pc bpc" id="L692" title="3 of 6 branches missed.">		if (roleCode != null &amp;&amp; !roleCode.isBlank() &amp;&amp; appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L693">			permissionSet.addAll(rolePermissionRepository.findAssignedPermissionCodesByRoleCode(roleCode));</span>
+		}
+
+<span class="fc" id="L696">		List&lt;SodConflictDetail&gt; conflicts = detectConflicts(permissionSet);</span>
+<span class="fc" id="L697">		return ConflictCheckResponse.of(roleCode, conflicts);</span>
+	}
+
+	@Override
+	public List&lt;SodConflictDetail&gt; getRoleConflicts() {
+<span class="nc" id="L702">		return roleConflictRepository.findAll().stream()</span>
+<span class="nc" id="L703">			.map(SodConflictDetail::fromRoleConflict)</span>
+<span class="nc" id="L704">			.toList();</span>
+	}
+
+	@Override
+	public List&lt;SodConflictDetail&gt; getPermissionConflicts() {
+<span class="nc" id="L709">		return permissionConflictRepository.findAll().stream()</span>
+<span class="nc" id="L710">			.map(SodConflictDetail::fromPermissionConflict)</span>
+<span class="nc" id="L711">			.toList();</span>
+	}
+
+	@Override
+	@Transactional
+	public SodConflictDetail createPermissionConflict(CreatePermissionConflictRequest request) {
+<span class="fc" id="L717">		log.info(&quot;Creating permission conflict between {} and {}&quot;, request.permissionCodeA(), request.permissionCodeB());</span>
+
+<span class="pc bpc" id="L719" title="2 of 4 branches missed.">		if (request.permissionCodeA() == null || request.permissionCodeA().isBlank()) {</span>
+<span class="nc" id="L720">			throw new IllegalArgumentException(&quot;Permission code A must not be blank&quot;);</span>
+		}
+<span class="pc bpc" id="L722" title="2 of 4 branches missed.">		if (request.permissionCodeB() == null || request.permissionCodeB().isBlank()) {</span>
+<span class="nc" id="L723">			throw new IllegalArgumentException(&quot;Permission code B must not be blank&quot;);</span>
+		}
+
+<span class="fc" id="L726">		String codeA = request.permissionCodeA().trim();</span>
+<span class="fc" id="L727">		String codeB = request.permissionCodeB().trim();</span>
+
+<span class="fc bfc" id="L729" title="All 2 branches covered.">		if (codeA.equalsIgnoreCase(codeB)) {</span>
+<span class="fc" id="L730">			throw new IllegalArgumentException(&quot;Permission code A and permission code B must be distinct&quot;);</span>
+		}
+
+<span class="fc bfc" id="L733" title="All 2 branches covered.">		if (!permissionRepository.existsByPermissionCode(codeA)) {</span>
+<span class="fc" id="L734">			throw permissionNotFound(codeA);</span>
+		}
+<span class="pc bpc" id="L736" title="1 of 2 branches missed.">		if (!permissionRepository.existsByPermissionCode(codeB)) {</span>
+<span class="nc" id="L737">			throw permissionNotFound(codeB);</span>
+		}
+
+		// Enforce alphabetical order for database check constraint CK_PC_ORDER: permission_code_a &lt; permission_code_b
+<span class="pc bpc" id="L741" title="1 of 2 branches missed.">		String orderedCodeA = codeA.compareTo(codeB) &lt; 0 ? codeA : codeB;</span>
+<span class="pc bpc" id="L742" title="1 of 2 branches missed.">		String orderedCodeB = codeA.compareTo(codeB) &lt; 0 ? codeB : codeA;</span>
+
+<span class="fc bfc" id="L744" title="All 2 branches covered.">		if (permissionConflictRepository.existsByPermissionCodeAAndPermissionCodeB(orderedCodeA, orderedCodeB)) {</span>
+<span class="fc" id="L745">			throw new ResourceAlreadyExistsException(</span>
+				&quot;PERMISSION_CONFLICT&quot;,
+				&quot;pair&quot;,
+				&quot;Permission conflict already exists between '&quot; + orderedCodeA + &quot;' and '&quot; + orderedCodeB + &quot;'&quot;
+			);
+		}
+
+<span class="fc" id="L752">		RoleConflictEntity derivedRoleConflict = null;</span>
+<span class="fc bfc" id="L753" title="All 2 branches covered.">		if (request.derivedFromRoleConflict() != null) {</span>
+<span class="fc" id="L754">			derivedRoleConflict = roleConflictRepository.findById(request.derivedFromRoleConflict())</span>
+<span class="pc" id="L755">				.orElseThrow(() -&gt; new ResourceNotFoundException(</span>
+					&quot;ROLE_CONFLICT&quot;,
+					&quot;conflictId&quot;,
+<span class="nc" id="L758">					&quot;Role conflict not found with id: &quot; + request.derivedFromRoleConflict()</span>
+				));
+		}
+
+<span class="pc bpc" id="L762" title="1 of 2 branches missed.">		String severity = (request.severity() != null) ? request.severity().trim().toUpperCase() : SEVERITY_BLOCK;</span>
+<span class="pc bpc" id="L763" title="3 of 4 branches missed.">		if (!SEVERITY_BLOCK.equals(severity) &amp;&amp; !SEVERITY_WARN.equals(severity)) {</span>
+<span class="nc" id="L764">			throw new IllegalArgumentException(&quot;Severity must be either BLOCK or WARN&quot;);</span>
+		}
+
+<span class="fc" id="L767">		PermissionConflictEntity entity = PermissionConflictEntity.builder()</span>
+<span class="fc" id="L768">			.permissionCodeA(orderedCodeA)</span>
+<span class="fc" id="L769">			.permissionCodeB(orderedCodeB)</span>
+<span class="fc" id="L770">			.severity(severity)</span>
+<span class="fc" id="L771">			.rationale(request.rationale().trim())</span>
+<span class="fc" id="L772">			.derivedFromRoleConflict(request.derivedFromRoleConflict())</span>
+<span class="fc" id="L773">			.derivedRoleConflict(derivedRoleConflict)</span>
+<span class="fc" id="L774">			.build();</span>
+
+<span class="fc" id="L776">		PermissionConflictEntity saved = permissionConflictRepository.save(entity);</span>
+<span class="fc" id="L777">		return SodConflictDetail.fromPermissionConflict(saved);</span>
+	}
+
+	private List&lt;SodConflictDetail&gt; detectConflicts(Set&lt;String&gt; permissionCodes) {
+<span class="pc bpc" id="L781" title="1 of 4 branches missed.">		if (permissionCodes == null || permissionCodes.size() &lt; 2) {</span>
+<span class="fc" id="L782">			return List.of();</span>
+		}
+
+<span class="fc" id="L785">		List&lt;PermissionConflictEntity&gt; permConflicts = permissionConflictRepository.findByPermissionCodeAInAndPermissionCodeBIn(permissionCodes, permissionCodes);</span>
+<span class="fc" id="L786">		return permConflicts.stream()</span>
+<span class="fc" id="L787">			.map(SodConflictDetail::fromPermissionConflict)</span>
+<span class="fc" id="L788">			.toList();</span>
+	}
+
+	private void validateNoBlockingConflicts(List&lt;SodConflictDetail&gt; conflicts) {
+<span class="fc" id="L792">		List&lt;SodConflictDetail&gt; blocking = conflicts.stream()</span>
+<span class="fc" id="L793">			.filter(c -&gt; SEVERITY_BLOCK.equalsIgnoreCase(c.severity()))</span>
+<span class="fc" id="L794">			.toList();</span>
+
+<span class="fc bfc" id="L796" title="All 2 branches covered.">		if (!blocking.isEmpty()) {</span>
+<span class="fc" id="L797">			String details = blocking.stream()</span>
+<span class="fc" id="L798">				.map(c -&gt; c.conflictType() + &quot;: &quot; + c.codeA() + &quot; conflicts with &quot; + c.codeB() + &quot; (&quot; + c.rationale() + &quot;)&quot;)</span>
+<span class="fc" id="L799">				.collect(Collectors.joining(&quot;; &quot;));</span>
+<span class="fc" id="L800">			throw new SodConflictException(&quot;Segregation of duties conflict detected: &quot; + details, blocking);</span>
+		}
+<span class="fc" id="L802">	}</span>
+
+	private String resolveGrantedBy(String requestGrantedBy, HttpServletRequest httpRequest) {
+<span class="pc bpc" id="L805" title="1 of 4 branches missed.">		if (requestGrantedBy != null &amp;&amp; !requestGrantedBy.isBlank()) {</span>
+<span class="fc" id="L806">			return requestGrantedBy.trim();</span>
+		}
+<span class="pc bpc" id="L808" title="3 of 4 branches missed.">		if (httpRequest != null &amp;&amp; jwtUtils != null) {</span>
+			try {
+<span class="nc" id="L810">				String userId = jwtUtils.getUserId(httpRequest);</span>
+<span class="nc bnc" id="L811" title="All 4 branches missed.">				if (userId != null &amp;&amp; !userId.isBlank()) {</span>
+<span class="nc" id="L812">					return userId;</span>
+				}
+<span class="nc" id="L814">			} catch (Exception ex) {</span>
+<span class="nc" id="L815">				log.debug(&quot;Unable to extract user ID from JWT cookies: {}&quot;, ex.getMessage());</span>
+<span class="nc" id="L816">			}</span>
+		}
+<span class="fc" id="L818">		return DEFAULT_USER;</span>
+	}
+
+	@Override
+	@Transactional
+	public void deleteRole(String roleCode) {
+<span class="fc" id="L824">		log.info(&quot;Deleting role with code: {}&quot;, roleCode);</span>
+<span class="pc bpc" id="L825" title="2 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="nc" id="L826">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+
+<span class="fc" id="L829">		var role = appRoleRepository.findByRoleCode(roleCode)</span>
+<span class="fc" id="L830">			.orElseThrow(() -&gt; roleNotFound(roleCode));</span>
+
+<span class="fc bfc" id="L832" title="All 2 branches covered.">		if (role.isSystemRole()) {</span>
+<span class="fc" id="L833">			throw new IllegalArgumentException(&quot;System role cannot be deleted: &quot; + roleCode);</span>
+		}
+
+<span class="fc bfc" id="L836" title="All 2 branches covered.">		if(userRoleRepositoryV2.existsByRoleCode(roleCode)){</span>
+<span class="fc" id="L837">			throw new IllegalArgumentException(</span>
+					&quot;Cannot delete role: Role '&quot; + roleCode + &quot;' has assigned to Users.&quot;
+			);
+		}
+
+<span class="pc bpc" id="L842" title="1 of 2 branches missed.">		if (rolePermissionRepository.existsByIdRoleCode(roleCode)) {</span>
+<span class="nc" id="L843">			rolePermissionRepository.deleteByRoleCode(roleCode);</span>
+		}
+
+<span class="fc" id="L846">		appRoleRepository.delete(role);</span>
+<span class="fc" id="L847">	}</span>
+
+	@Override
+	@Transactional
+	public void revokePermissionFromRole(String roleCode, String permissionCode) {
+<span class="fc" id="L852">		doRevokePermissionFromRole(roleCode, permissionCode, null);</span>
+<span class="fc" id="L853">	}</span>
+
+	@Override
+	@Transactional
+	public void revokePermissionFromRole(String roleCode, String permissionCode, HttpServletRequest httpRequest) {
+<span class="fc" id="L858">		doRevokePermissionFromRole(roleCode, permissionCode, httpRequest);</span>
+<span class="fc" id="L859">	}</span>
+
+	private void doRevokePermissionFromRole(String roleCode, String permissionCode, HttpServletRequest httpRequest) {
+<span class="fc" id="L862">		log.info(&quot;Revoking permission {} from role {}&quot;, permissionCode, roleCode);</span>
+<span class="fc bfc" id="L863" title="All 2 branches covered.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L864">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc bfc" id="L867" title="All 2 branches covered.">		if (!permissionRepository.existsByPermissionCode(permissionCode)) {</span>
+<span class="fc" id="L868">			throw permissionNotFound(permissionCode);</span>
+		}
+
+<span class="fc" id="L871">		var id = new RolePermissionId(roleCode, permissionCode);</span>
+<span class="pc bpc" id="L872" title="1 of 2 branches missed.">		if (rolePermissionRepository.existsById(id)) {</span>
+<span class="fc" id="L873">			rolePermissionRepository.deleteById(id);</span>
+<span class="fc" id="L874">			String changedBy = resolveGrantedBy(null, httpRequest);</span>
+<span class="fc" id="L875">			recordHistory(roleCode, permissionCode, ACTION_REMOVED, changedBy);</span>
+		}
+<span class="fc" id="L877">	}</span>
+
+	@Override
+	@Transactional
+	public void revokePermissionsFromRole(String roleCode, List&lt;String&gt; permissionCodes) {
+<span class="fc" id="L882">		doRevokePermissionsFromRole(roleCode, permissionCodes, null);</span>
+<span class="fc" id="L883">	}</span>
+
+	@Override
+	@Transactional
+	public void revokePermissionsFromRole(String roleCode, List&lt;String&gt; permissionCodes, HttpServletRequest httpRequest) {
+<span class="fc" id="L888">		doRevokePermissionsFromRole(roleCode, permissionCodes, httpRequest);</span>
+<span class="fc" id="L889">	}</span>
+
+	private void doRevokePermissionsFromRole(String roleCode, List&lt;String&gt; permissionCodes, HttpServletRequest httpRequest) {
+<span class="fc" id="L892">		log.info(&quot;Revoking multiple permissions from role {}&quot;, roleCode);</span>
+<span class="fc bfc" id="L893" title="All 2 branches covered.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L894">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="pc bpc" id="L897" title="2 of 4 branches missed.">		if (permissionCodes != null &amp;&amp; !permissionCodes.isEmpty()) {</span>
+<span class="fc" id="L898">			rolePermissionRepository.deleteByRoleCodeAndPermissionCodes(roleCode, permissionCodes);</span>
+<span class="fc" id="L899">			String changedBy = resolveGrantedBy(null, httpRequest);</span>
+<span class="fc bfc" id="L900" title="All 2 branches covered.">			for (String code : permissionCodes) {</span>
+<span class="fc" id="L901">				recordHistory(roleCode, code, ACTION_REMOVED, changedBy);</span>
+<span class="fc" id="L902">			}</span>
+		}
+<span class="fc" id="L904">	}</span>
+
+	@Override
+	public RolePermissionHistoryPageResponse getRolePermissionHistory(
+			String roleCode,
+			String permissionCode,
+			String actionTaken,
+			int page,
+			int pageSize) {
+<span class="fc" id="L913">		log.info(&quot;Fetching permission history for role: {}&quot;, roleCode);</span>
+<span class="pc bpc" id="L914" title="1 of 4 branches missed.">		if (roleCode == null || roleCode.isBlank()) {</span>
+<span class="fc" id="L915">			throw new IllegalArgumentException(&quot;Role code must not be blank&quot;);</span>
+		}
+<span class="fc bfc" id="L917" title="All 2 branches covered.">		if (!appRoleRepository.existsByRoleCode(roleCode)) {</span>
+<span class="fc" id="L918">			throw roleNotFound(roleCode);</span>
+		}
+
+<span class="fc" id="L921">		return queryHistory(roleCode.trim(), permissionCode, actionTaken, page, pageSize);</span>
+	}
+
+	@Override
+	public RolePermissionHistoryPageResponse getAllRolePermissionHistory(
+			String roleCode,
+			String permissionCode,
+			String actionTaken,
+			int page,
+			int pageSize) {
+<span class="fc" id="L931">		log.info(&quot;Fetching global role permission history&quot;);</span>
+<span class="fc" id="L932">		return queryHistory(roleCode, permissionCode, actionTaken, page, pageSize);</span>
+	}
+
+	private RolePermissionHistoryPageResponse queryHistory(
+			String roleCode,
+			String permissionCode,
+			String actionTaken,
+			int page,
+			int pageSize) {
+<span class="fc" id="L941">		int pageNumber = Math.max(page - 1, 0);</span>
+<span class="fc bfc" id="L942" title="All 2 branches covered.">		int size = (pageSize &lt;= 0) ? 20 : pageSize;</span>
+
+<span class="fc" id="L944">		Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, &quot;changedAt&quot;));</span>
+
+<span class="fc" id="L946">		Specification&lt;RolePermissionHistoryEntity&gt; spec = (root, query, cb) -&gt; {</span>
+<span class="fc" id="L947">			List&lt;Predicate&gt; predicates = new ArrayList&lt;&gt;();</span>
+
+<span class="pc bpc" id="L949" title="1 of 4 branches missed.">			if (roleCode != null &amp;&amp; !roleCode.isBlank()) {</span>
+<span class="fc" id="L950">				predicates.add(cb.equal(root.get(ROLE_CODE_FIELD), roleCode.trim()));</span>
+			}
+<span class="pc bpc" id="L952" title="1 of 4 branches missed.">			if (permissionCode != null &amp;&amp; !permissionCode.isBlank()) {</span>
+<span class="fc" id="L953">				predicates.add(cb.equal(root.get(PERMISSION_CODE_FIELD), permissionCode.trim()));</span>
+			}
+<span class="pc bpc" id="L955" title="1 of 4 branches missed.">			if (actionTaken != null &amp;&amp; !actionTaken.isBlank()) {</span>
+<span class="fc" id="L956">				predicates.add(cb.equal(root.get(&quot;actionTaken&quot;), actionTaken.trim().toUpperCase()));</span>
+			}
+
+<span class="fc" id="L959">			return cb.and(predicates.toArray(new Predicate[0]));</span>
+		};
+
+<span class="fc" id="L962">		Page&lt;RolePermissionHistoryEntity&gt; resultPage = rolePermissionHistoryRepository.findAll(spec, pageable);</span>
+
+<span class="fc" id="L964">		List&lt;RolePermissionHistoryResponse&gt; items = resultPage.getContent().stream()</span>
+<span class="fc" id="L965">			.map(RolePermissionHistoryResponse::fromEntity)</span>
+<span class="fc" id="L966">			.toList();</span>
+
+<span class="fc" id="L968">		return new RolePermissionHistoryPageResponse(</span>
+			items,
+<span class="fc" id="L970">			resultPage.getTotalElements(),</span>
+			pageNumber + 1,
+			size,
+<span class="fc" id="L973">			resultPage.getTotalPages(),</span>
+<span class="fc" id="L974">			resultPage.hasNext()</span>
+		);
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlobalExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.exceptions</a> &gt; <span class="el_source">GlobalExceptionHandler.java</span></div><h1>GlobalExceptionHandler.java</h1><pre class="source lang-java linenums">package com.empay.user_management.exceptions;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.coyote.BadRequestException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+
+import com.empay.user_management.valueobjects.ErrorResponse;
+
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.log4j.Log4j2;
+
+@RestControllerAdvice
+<span class="fc" id="L29">@Log4j2</span>
+<span class="fc" id="L30">public class GlobalExceptionHandler {</span>
+
+	private static final String SYSTEM_ERROR = &quot;System Error&quot;;
+
+	private static final String VALIDATION_ERROR = &quot;Validation Error&quot;;
+
+	private static final String CONSTRAINT_ERROR = &quot;Constraint Error&quot;;
+
+	private static final String EXPECTATION_ERROR = &quot;Expectation Failed&quot;;
+
+	private static final String INVALID_REQUEST_ERROR = &quot;Invalid Request&quot;;
+
+	@ExceptionHandler(ResourceNotFoundException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleNotFound(HttpServletRequest request, ResourceNotFoundException ex) {
+<span class="fc" id="L44">		log.warn(&quot;Resource not found at [{}]: {}&quot;, request.getRequestURI(), ex.getMessage(), ex);</span>
+<span class="fc" id="L45">		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null, EXPECTATION_ERROR);</span>
+	}
+
+	@ExceptionHandler(ResourceAlreadyExistsException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleAlreadyExists(HttpServletRequest request,
+			ResourceAlreadyExistsException ex) {
+<span class="fc" id="L51">		log.warn(&quot;Resource already exists at [{}]: {}&quot;, request.getRequestURI(), ex.getMessage(), ex);</span>
+<span class="fc" id="L52">		return build(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), null, EXPECTATION_ERROR);</span>
+	}
+
+	@ExceptionHandler(SodConflictException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleSodConflict(HttpServletRequest request, SodConflictException ex) {
+<span class="fc" id="L57">		log.warn(&quot;SoD Conflict violation at [{}]: {}&quot;, request.getRequestURI(), ex.getMessage());</span>
+<span class="fc" id="L58">		List&lt;Map&lt;String, String&gt;&gt; errors = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L59" title="All 2 branches covered.">		if (ex.getConflicts() != null) {</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">			for (var conflict : ex.getConflicts()) {</span>
+<span class="fc" id="L61">				Map&lt;String, String&gt; err = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L62">				err.put(&quot;conflictType&quot;, conflict.conflictType());</span>
+<span class="fc" id="L63">				err.put(&quot;codeA&quot;, conflict.codeA());</span>
+<span class="fc" id="L64">				err.put(&quot;codeB&quot;, conflict.codeB());</span>
+<span class="fc" id="L65">				err.put(&quot;severity&quot;, conflict.severity());</span>
+<span class="fc" id="L66">				err.put(&quot;rationale&quot;, conflict.rationale());</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">				if (conflict.derivedRoleConflict() != null) {</span>
+<span class="fc" id="L68">					err.put(&quot;derivedRoleConflict&quot;, conflict.derivedRoleConflict());</span>
+				}
+<span class="fc" id="L70">				errors.add(err);</span>
+<span class="fc" id="L71">			}</span>
+		}
+<span class="fc" id="L73">		return build(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), errors, &quot;SoD Conflict Error&quot;);</span>
+	}
+
+	@ExceptionHandler({ DataIntegrityViolationException.class, org.springframework.dao.DataAccessException.class, jakarta.persistence.PersistenceException.class })
+	public ResponseEntity&lt;ErrorResponse&gt; handleDataIntegrity(HttpServletRequest request, Exception ex) {
+<span class="fc" id="L78">		log.error(&quot;Database or persistence violation at [{}]: {}&quot;, request.getRequestURI(), ex.getMessage(), ex);</span>
+<span class="pc bpc" id="L79" title="1 of 4 branches missed.">		String message = ex.getMessage() != null &amp;&amp; !ex.getMessage().isBlank() ? ex.getMessage() : &quot;Database operation failed&quot;;</span>
+<span class="fc" id="L80">		Throwable root = ex;</span>
+<span class="pc bpc" id="L81" title="1 of 4 branches missed.">		while (root.getCause() != null &amp;&amp; root.getCause() != root) {</span>
+<span class="fc" id="L82">			root = root.getCause();</span>
+		}
+<span class="pc bpc" id="L84" title="1 of 4 branches missed.">		if (root.getMessage() != null &amp;&amp; !root.getMessage().isBlank()) {</span>
+<span class="fc" id="L85">			message = root.getMessage();</span>
+		}
+<span class="fc" id="L87">		return build(HttpStatus.CONFLICT, message, request.getRequestURI(), null, CONSTRAINT_ERROR);</span>
+	}
+
+
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleValidation(MethodArgumentNotValidException ex,
+			HttpServletRequest request) {
+<span class="fc" id="L94">		log.warn(&quot;Validation failed at [{}]&quot;, request.getRequestURI(), ex);</span>
+<span class="fc" id="L95">		List&lt;Map&lt;String, String&gt;&gt; errors = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L97">		ex.getBindingResult().getFieldErrors().forEach(error -&gt; {</span>
+<span class="fc" id="L98">			Map&lt;String, String&gt; fieldError = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L99">			fieldError.put(&quot;fieldName&quot;, error.getField());</span>
+<span class="fc" id="L100">			fieldError.put(&quot;fieldError&quot;, error.getDefaultMessage());</span>
+
+<span class="fc" id="L102">			errors.add(fieldError);</span>
+<span class="fc" id="L103">		});</span>
+
+<span class="fc" id="L105">		return build(HttpStatus.BAD_REQUEST, &quot;Validation failed&quot;, request.getRequestURI(), errors, VALIDATION_ERROR);</span>
+	}
+
+	@ExceptionHandler({ MethodArgumentTypeMismatchException.class, IllegalArgumentException.class })
+	public ResponseEntity&lt;ErrorResponse&gt; handleBadRequest(HttpServletRequest request, Exception ex) {
+<span class="fc" id="L110">		log.warn(&quot;Bad request at [{}]: {}&quot;, request.getRequestURI(), ex.getMessage(), ex);</span>
+<span class="pc bpc" id="L111" title="1 of 4 branches missed.">		String message = (ex.getMessage() != null &amp;&amp; !ex.getMessage().isBlank()) ? ex.getMessage()</span>
+<span class="fc" id="L112">				: &quot;Invalid request parameters&quot;;</span>
+<span class="fc" id="L113">		return build(HttpStatus.BAD_REQUEST, message, request.getRequestURI(), null, INVALID_REQUEST_ERROR);</span>
+	}
+
+	@ExceptionHandler(NoHandlerFoundException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleNoHandlerFound(NoHandlerFoundException ex, HttpServletRequest request) {
+<span class="fc" id="L118">		log.warn(&quot;No handler found for [{} {}]&quot;, ex.getHttpMethod(), ex.getRequestURL());</span>
+<span class="fc" id="L119">		return build(HttpStatus.NOT_FOUND, &quot;No endpoint found for &quot; + ex.getHttpMethod() + &quot; &quot; + ex.getRequestURL(),</span>
+<span class="fc" id="L120">				request.getRequestURI(), null, INVALID_REQUEST_ERROR);</span>
+	}
+
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleGeneric(HttpServletRequest request, Exception ex) {
+<span class="fc" id="L125">		log.error(&quot;Unhandled exception at [{}]&quot;, request.getRequestURI(), ex);</span>
+<span class="fc" id="L126">		return build(HttpStatus.INTERNAL_SERVER_ERROR, &quot;Something went wrong. Please contact support.&quot;,</span>
+<span class="fc" id="L127">				request.getRequestURI(), null, SYSTEM_ERROR);</span>
+	}
+
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleAccessDenied(
+			HttpServletRequest request,
+			AccessDeniedException ex) {
+
+<span class="fc" id="L135">		log.warn(&quot;Access denied at [{}]: {}&quot;,</span>
+<span class="fc" id="L136">				request.getRequestURI(), ex.getMessage());</span>
+
+<span class="fc" id="L138">		return build(</span>
+				HttpStatus.FORBIDDEN,
+				&quot;You do not have permission to perform this action.&quot;,
+<span class="fc" id="L141">				request.getRequestURI(),</span>
+				null,
+				&quot;ACCESS_DENIED&quot;
+		);
+	}
+
+	private ResponseEntity&lt;ErrorResponse&gt; build(HttpStatus status, String message, String path,
+			List&lt;Map&lt;String, String&gt;&gt; errors, String type) {
+<span class="fc" id="L149">		var response = ErrorResponse.builder().timestamp(LocalDateTime.now(ZoneOffset.UTC)).status(status.value()).type(type)</span>
+<span class="fc" id="L150">				.message(message).path(path).errors(errors).build();</span>
+<span class="fc" id="L151">		return new ResponseEntity&lt;&gt;(response, status);</span>
+	}
+
+	@ExceptionHandler(ResponseStatusException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleResponseStatusException(HttpServletRequest request,
+			ResponseStatusException ex) {
+
+<span class="fc" id="L158">		HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());</span>
+
+<span class="fc bfc" id="L160" title="All 2 branches covered.">		return build(status, ex.getReason() != null ? ex.getReason() : &quot;Request failed&quot;, request.getRequestURI(), null,</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">				status == HttpStatus.CONFLICT ? &quot;Conflict Error&quot; : INVALID_REQUEST_ERROR);</span>
+	}
+
+	@ExceptionHandler(BadRequestException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleBadRequestException(HttpServletRequest request, BadRequestException ex) {
+
+		
+
+<span class="fc" id="L169">		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI(), null, INVALID_REQUEST_ERROR);</span>
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity&lt;ErrorResponse&gt; handleInvalidRequestBody(
+	        HttpServletRequest request,
+	        HttpMessageNotReadableException ex) {
+
+<span class="fc" id="L177">	    log.warn(&quot;Invalid request body at [{}]: {}&quot;,</span>
+<span class="fc" id="L178">	            request.getRequestURI(), ex.getMessage());</span>
+
+<span class="fc" id="L180">	    return build(</span>
+	            HttpStatus.BAD_REQUEST,
+	            &quot;Invalid request body. Please check the JSON format and field values.&quot;,
+<span class="fc" id="L183">	            request.getRequestURI(),</span>
+	            null,
+	            INVALID_REQUEST_ERROR);
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

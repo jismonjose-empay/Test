@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppRoleController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report"></a> &gt; <a href="index.source.html" class="el_package">com.empay.user_management.controller</a> &gt; <span class="el_source">AppRoleController.java</span></div><h1>AppRoleController.java</h1><pre class="source lang-java linenums">package com.empay.user_management.controller;
+
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.empay.user_management.dto.BulkRolePermissionSummary;
+import com.empay.user_management.dto.BulkRolePermissionsRequest;
+import com.empay.user_management.dto.ConflictCheckRequest;
+import com.empay.user_management.dto.ConflictCheckResponse;
+import com.empay.user_management.dto.CreatePermissionConflictRequest;
+import com.empay.user_management.dto.CreateRoleRequest;
+import com.empay.user_management.dto.PermissionResponse;
+import com.empay.user_management.dto.RolePermissionHistoryPageResponse;
+import com.empay.user_management.dto.RolePermissionRequest;
+import com.empay.user_management.dto.RolePermissionsResponse;
+import com.empay.user_management.dto.RoleResponse;
+import com.empay.user_management.dto.RolesAndPermissionsResponse;
+import com.empay.user_management.dto.SodConflictDetail;
+import com.empay.user_management.dto.UpdateRoleRequest;
+import com.empay.user_management.service.AppRoleService;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+
+/**
+ * Controller providing APIs for APP_ROLE catalogue and ROLE_PERMISSION management.
+ */
+@RestController
+@RequestMapping(&quot;/api/roles&quot;)
+public class AppRoleController {
+
+	private final AppRoleService appRoleService;
+
+<span class="fc" id="L46">	public AppRoleController(AppRoleService appRoleService) {</span>
+<span class="fc" id="L47">		this.appRoleService = appRoleService;</span>
+<span class="fc" id="L48">	}</span>
+
+	/**
+	 * Retrieve all configured application roles.
+	 *
+	 * @return List of role records.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW')&quot;)
+	@GetMapping
+	public ResponseEntity&lt;List&lt;RoleResponse&gt;&gt; getAllRoles() {
+<span class="fc" id="L58">		return ResponseEntity.ok(appRoleService.getAllRoles());</span>
+	}
+
+	/**
+	 * Retrieve both all roles and all permissions in a single combined payload.
+	 * Ideal for UI bootstrap and permission matrix screens.
+	 *
+	 * @return Combined roles and permissions record.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW')&quot;)
+	@GetMapping(&quot;/roles-and-permissions&quot;)
+	public ResponseEntity&lt;RolesAndPermissionsResponse&gt; getRolesAndPermissions() {
+<span class="fc" id="L70">		return ResponseEntity.ok(appRoleService.getRolesAndPermissions());</span>
+	}
+
+	/**
+	 * Retrieve specific application role by role code.
+	 *
+	 * @param roleCode Role unique code (e.g., USER_ADMIN, MAKER).
+	 * @return Role record.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW')&quot;)
+	@GetMapping(&quot;/{roleCode}&quot;)
+	public ResponseEntity&lt;RoleResponse&gt; getRoleByCode(@PathVariable String roleCode) {
+<span class="fc" id="L82">		return ResponseEntity.ok(appRoleService.getRoleByCode(roleCode));</span>
+	}
+
+	/**
+	 * Create a new application role.
+	 *
+	 * @param request Role creation request.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return Created role record.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.CREATE')&quot;)
+	@PostMapping
+	public ResponseEntity&lt;RoleResponse&gt; createRole(
+			@RequestBody @Valid CreateRoleRequest request,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L97">		RoleResponse created = appRoleService.createRole(request, httpRequest);</span>
+<span class="fc" id="L98">		return ResponseEntity.status(HttpStatus.CREATED).body(created);</span>
+	}
+
+	/**
+	 * Update application role details.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param request Role update request.
+	 * @param httpRequest HTTP servlet request.
+	 * @return Updated role record.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PutMapping(&quot;/{roleCode}&quot;)
+	public ResponseEntity&lt;RoleResponse&gt; updateRole(
+			@PathVariable String roleCode,
+			@RequestBody @Valid UpdateRoleRequest request,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L115">		RoleResponse updated = appRoleService.updateRole(roleCode, request, httpRequest);</span>
+<span class="fc" id="L116">		return ResponseEntity.ok(updated);</span>
+	}
+
+	/**
+	 * Evaluate potential Segregation of Duties conflicts for a role and permission set.
+	 * Pre-flight check before saving role permissions.
+	 *
+	 * @param request Conflict check request.
+	 * @return Conflict evaluation result.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PostMapping(&quot;/check-conflicts&quot;)
+	public ResponseEntity&lt;ConflictCheckResponse&gt; checkConflicts(
+			@RequestBody @Valid ConflictCheckRequest request) {
+<span class="fc" id="L130">		return ResponseEntity.ok(appRoleService.checkConflicts(request));</span>
+	}
+
+	/**
+	 * Retrieve all configured role-level conflicts (ROLE_CONFLICT).
+	 *
+	 * @return List of role conflict details.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_SOD.VIEW')&quot;)
+	@GetMapping(&quot;/conflicts&quot;)
+	public ResponseEntity&lt;List&lt;SodConflictDetail&gt;&gt; getRoleConflicts() {
+<span class="fc" id="L141">		return ResponseEntity.ok(appRoleService.getRoleConflicts());</span>
+	}
+
+	/**
+	 * Retrieve all configured permission-level conflicts (PERMISSION_CONFLICT).
+	 *
+	 * @return List of permission conflict details.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_SOD.VIEW')&quot;)
+	@GetMapping(&quot;/permission-conflicts&quot;)
+	public ResponseEntity&lt;List&lt;SodConflictDetail&gt;&gt; getPermissionConflicts() {
+<span class="fc" id="L152">		return ResponseEntity.ok(appRoleService.getPermissionConflicts());</span>
+	}
+
+	/**
+	 * Create a new permission-level Segregation of Duties conflict (PERMISSION_CONFLICT).
+	 * Supports standalone conflicts (derivedFromRoleConflict = null) or conflicts derived from a role conflict.
+	 *
+	 * @param request Permission conflict creation payload.
+	 * @return Created conflict detail.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_SOD.CREATE')&quot;)
+	@PostMapping(&quot;/permission-conflicts&quot;)
+	public ResponseEntity&lt;SodConflictDetail&gt; createPermissionConflict(
+			@RequestBody @Valid CreatePermissionConflictRequest request) {
+<span class="fc" id="L166">		SodConflictDetail created = appRoleService.createPermissionConflict(request);</span>
+<span class="fc" id="L167">		return ResponseEntity.status(HttpStatus.CREATED).body(created);</span>
+	}
+
+	/**
+	 * Retrieve all permissions assigned to a specific role.
+	 *
+	 * @param roleCode Role unique code.
+	 * @return List of assigned permission records.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW')&quot;)
+	@GetMapping(&quot;/{roleCode}/permissions&quot;)
+	public ResponseEntity&lt;List&lt;PermissionResponse&gt;&gt; getPermissionsForRole(@PathVariable String roleCode) {
+<span class="fc" id="L179">		return ResponseEntity.ok(appRoleService.getPermissionsForRole(roleCode));</span>
+	}
+
+	/**
+	 * Retrieve assigned permissions for multiple roles in bulk, or for all roles if none specified.
+	 * Solves the N+1 single-role fetching problem for UI matrix and role management screens.
+	 *
+	 * @param roleCodes Optional list of role codes to filter (e.g., ?roleCodes=CHECKER,MAKER).
+	 * @return List of role permission details for each requested role.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW')&quot;)
+	@GetMapping({&quot;/permissions/bulk&quot;, &quot;/permissions&quot;})
+	public ResponseEntity&lt;List&lt;RolePermissionsResponse&gt;&gt; getBulkRolePermissions(
+			@RequestParam(required = false) List&lt;String&gt; roleCodes) {
+<span class="fc" id="L193">		List&lt;RolePermissionsResponse&gt; result = appRoleService.getBulkRolePermissions(roleCodes);</span>
+<span class="fc" id="L194">		return ResponseEntity.ok(result);</span>
+	}
+
+	/**
+	 * Assign one or more permissions to a role.
+	 *
+	 * @param request Role permission assignment payload.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return Updated list of permissions attached to the role.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PostMapping(&quot;/permissions&quot;)
+	public ResponseEntity&lt;List&lt;PermissionResponse&gt;&gt; assignPermissions(
+			@RequestBody @Valid RolePermissionRequest request,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L209">		List&lt;PermissionResponse&gt; assigned = appRoleService.assignPermissionsToRole(request, httpRequest);</span>
+<span class="fc" id="L210">		return ResponseEntity.status(HttpStatus.CREATED).body(assigned);</span>
+	}
+
+	/**
+	 * Assign one or more permissions to a specific role path.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param permissionCodes List of permission codes to attach.
+	 * @param httpRequest HTTP servlet request.
+	 * @return Updated list of permissions attached to the role.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PostMapping(&quot;/{roleCode}/permissions&quot;)
+	public ResponseEntity&lt;List&lt;PermissionResponse&gt;&gt; assignPermissionsToRolePath(
+			@PathVariable String roleCode,
+			@RequestBody List&lt;String&gt; permissionCodes,
+			HttpServletRequest httpRequest) {
+<span class="nc" id="L227">		var request = new RolePermissionRequest(roleCode, permissionCodes, null);</span>
+<span class="nc" id="L228">		List&lt;PermissionResponse&gt; assigned = appRoleService.assignPermissionsToRole(request, httpRequest);</span>
+<span class="nc" id="L229">		return ResponseEntity.status(HttpStatus.CREATED).body(assigned);</span>
+	}
+
+	/**
+	 * Synchronize/Update the full set of permissions attached to a role.
+	 * Matches the UI multi-select or checkbox matrix state.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param permissionCodes New complete list of permission codes for this role.
+	 * @param httpRequest HTTP servlet request.
+	 * @return Updated list of permissions attached to the role.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PutMapping(&quot;/{roleCode}/permissions&quot;)
+	public ResponseEntity&lt;List&lt;PermissionResponse&gt;&gt; updateRolePermissions(
+			@PathVariable String roleCode,
+			@RequestBody List&lt;String&gt; permissionCodes,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L247">		List&lt;PermissionResponse&gt; updated = appRoleService.updateRolePermissions(roleCode, permissionCodes, httpRequest);</span>
+<span class="fc" id="L248">		return ResponseEntity.ok(updated);</span>
+	}
+
+	/**
+	 * Bulk configure role permissions across multiple roles.
+	 * Supports full matrix synchronization or targeted grants and revocations.
+	 *
+	 * @param request Bulk role permissions configuration payload.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return Summary of bulk operation metrics and updated roles.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PutMapping(&quot;/permissions/bulk&quot;)
+	public ResponseEntity&lt;BulkRolePermissionSummary&gt; bulkConfigureRolePermissionsPut(
+			@RequestBody @Valid BulkRolePermissionsRequest request,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L264">		BulkRolePermissionSummary summary = appRoleService.bulkConfigureRolePermissions(request, httpRequest);</span>
+<span class="fc" id="L265">		return ResponseEntity.ok(summary);</span>
+	}
+
+	/**
+	 * Bulk configure role permissions across multiple roles (POST alias for clients).
+	 *
+	 * @param request Bulk role permissions configuration payload.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return Summary of bulk operation metrics and updated roles.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@PostMapping(&quot;/permissions/bulk&quot;)
+	public ResponseEntity&lt;BulkRolePermissionSummary&gt; bulkConfigureRolePermissionsPost(
+			@RequestBody @Valid BulkRolePermissionsRequest request,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L280">		return bulkConfigureRolePermissionsPut(request, httpRequest);</span>
+	}
+
+	/**
+	 * Delete an application role and its attached permission associations.
+	 * System roles cannot be deleted.
+	 *
+	 * @param roleCode Role unique code.
+	 * @return HTTP 204 No Content.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.DELETE')&quot;)
+	@DeleteMapping(&quot;/{roleCode}&quot;)
+	public ResponseEntity&lt;Void&gt; deleteRole(@PathVariable String roleCode) {
+<span class="fc" id="L293">		appRoleService.deleteRole(roleCode);</span>
+<span class="fc" id="L294">		return ResponseEntity.noContent().build();</span>
+	}
+
+	/**
+	 * Revoke a single permission from a role.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param permissionCode Permission code to revoke.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return HTTP 204 No Content.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@DeleteMapping(&quot;/{roleCode}/permissions/{permissionCode}&quot;)
+	public ResponseEntity&lt;Void&gt; revokePermission(
+			@PathVariable String roleCode,
+			@PathVariable String permissionCode,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L311">		appRoleService.revokePermissionFromRole(roleCode, permissionCode, httpRequest);</span>
+<span class="fc" id="L312">		return ResponseEntity.noContent().build();</span>
+	}
+
+	/**
+	 * Revoke a list of permissions from a role.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param permissionCodes List of permission codes to revoke.
+	 * @param httpRequest HTTP servlet request for audit context.
+	 * @return HTTP 204 No Content.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.EDIT')&quot;)
+	@DeleteMapping(&quot;/{roleCode}/permissions&quot;)
+	public ResponseEntity&lt;Void&gt; revokePermissions(
+			@PathVariable String roleCode,
+			@RequestBody List&lt;String&gt; permissionCodes,
+			HttpServletRequest httpRequest) {
+<span class="fc" id="L329">		appRoleService.revokePermissionsFromRole(roleCode, permissionCodes, httpRequest);</span>
+<span class="fc" id="L330">		return ResponseEntity.noContent().build();</span>
+	}
+
+	/**
+	 * Retrieve paginated audit history records for a specific role.
+	 *
+	 * @param roleCode Role unique code.
+	 * @param permissionCode Optional filter by permission code.
+	 * @param actionTaken Optional filter by action taken (ADDED or REMOVED).
+	 * @param page One-based page number (defaults to 1).
+	 * @param pageSize Number of items per page (defaults to 20).
+	 * @return Paginated history records for the role.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW_HISTORY')&quot;)
+	@GetMapping(&quot;/{roleCode}/permissions/history&quot;)
+	public ResponseEntity&lt;RolePermissionHistoryPageResponse&gt; getRolePermissionHistory(
+			@PathVariable String roleCode,
+			@RequestParam(required = false) String permissionCode,
+			@RequestParam(required = false) String actionTaken,
+			@RequestParam(defaultValue = &quot;1&quot;) int page,
+			@RequestParam(defaultValue = &quot;20&quot;) int pageSize) {
+<span class="fc" id="L351">		RolePermissionHistoryPageResponse history = appRoleService.getRolePermissionHistory(</span>
+				roleCode, permissionCode, actionTaken, page, pageSize);
+<span class="fc" id="L353">		return ResponseEntity.ok(history);</span>
+	}
+
+	/**
+	 * Retrieve paginated audit history records across all roles.
+	 *
+	 * @param roleCode Optional filter by role code.
+	 * @param permissionCode Optional filter by permission code.
+	 * @param actionTaken Optional filter by action taken (ADDED or REMOVED).
+	 * @param page One-based page number (defaults to 1).
+	 * @param pageSize Number of items per page (defaults to 20).
+	 * @return Paginated history records across all roles.
+	 */
+	@PreAuthorize(&quot;hasAuthority('ADMIN.UM_ROLES.VIEW_HISTORY')&quot;)
+	@GetMapping(&quot;/permissions/history&quot;)
+	public ResponseEntity&lt;RolePermissionHistoryPageResponse&gt; getAllRolePermissionHistory(
+			@RequestParam(required = false) String roleCode,
+			@RequestParam(required = false) String permissionCode,
+			@RequestParam(required = false) String actionTaken,
+			@RequestParam(defaultValue = &quot;1&quot;) int page,
+			@RequestParam(defaultValue = &quot;20&quot;) int pageSize) {
+<span class="fc" id="L374">		RolePermissionHistoryPageResponse history = appRoleService.getAllRolePermissionHistory(</span>
+				roleCode, permissionCode, actionTaken, page, pageSize);
+<span class="fc" id="L376">		return ResponseEntity.ok(history);</span>
+	}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
