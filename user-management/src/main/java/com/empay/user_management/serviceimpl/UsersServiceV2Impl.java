@@ -63,6 +63,7 @@ public class UsersServiceV2Impl implements UsersServiceV2 {
 
 	private static final String STATUS_FIELD = "status";
 	private static final String CLOSED = "CLOSED";
+	private static final String STATUS_ACTIVE = "ACTIVE";
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 	@Value("${app.security.default-user-password:}")
@@ -192,7 +193,7 @@ public class UsersServiceV2Impl implements UsersServiceV2 {
 
 		usersVo.setInsCode(usersVo.getInsCode() != null ? usersVo.getInsCode() : "001");
 		entity.setInstitutionCode(usersVo.getInsCode());
-		entity.setStatus("ACTIVE");
+		entity.setStatus(STATUS_ACTIVE);
 		entity.setIsBreakGlass(usersVo.getIsBreakGlass() != null ? usersVo.getIsBreakGlass() : 'N');
 		entity.setIdpSubject(usersVo.getIdpSubject());
 		if (entity.getAuthMode() == null) {
@@ -359,11 +360,11 @@ public class UsersServiceV2Impl implements UsersServiceV2 {
 
 	public ResponseEntity<Object> suspendUser(String userId, String status,String request) {
 		UsersEntityV2 usersEntity;
-		if(status.equalsIgnoreCase("ACTIVE")){
+		if(status.equalsIgnoreCase(STATUS_ACTIVE)){
 			 var currentStatus = new String[]{"SUSPENDED", "BLOCKED"};
 			 usersEntity = usersRepositoryV2.findByUserIdAndStatusIn(userId,currentStatus);
 		}else{
-			 usersEntity = usersRepositoryV2.findByUserIdAndStatus(userId, "ACTIVE");
+			 usersEntity = usersRepositoryV2.findByUserIdAndStatus(userId, STATUS_ACTIVE);
 		}
 
 		if (Objects.isNull(usersEntity)) {
@@ -477,7 +478,7 @@ public class UsersServiceV2Impl implements UsersServiceV2 {
 		Map<String, Object> response = new LinkedHashMap<>();
 
 		long totalUsers = usersEntity.size();
-		long activeUsers = usersEntity.stream().filter(e -> "ACTIVE".equalsIgnoreCase(e.getStatus())).count();
+		long activeUsers = usersEntity.stream().filter(e -> STATUS_ACTIVE.equalsIgnoreCase(e.getStatus())).count();
 		long suspendedUsers = usersEntity.stream().filter(e -> "SUSPENDED".equalsIgnoreCase(e.getStatus())).count();
 		long closedUsers = usersEntity.stream().filter(e -> CLOSED.equalsIgnoreCase(e.getStatus())).count();
 		long activePercentage = Math.round((activeUsers * 100.0) / totalUsers);

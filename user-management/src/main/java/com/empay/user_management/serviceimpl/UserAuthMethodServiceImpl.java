@@ -1,6 +1,7 @@
 package com.empay.user_management.serviceimpl;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -13,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -602,8 +604,9 @@ public class UserAuthMethodServiceImpl implements UserAuthMethodService {
 	private String requestAccessToken(AuthProviderConfigEntity config, String code, String clientRedirectUri, HttpClient httpClient) throws IOException, InterruptedException {
 		String formBody = buildTokenRequestBody(config, code, clientRedirectUri);
 
+		URI tokenUri = validateOutboundEndpoint(config.getTokenUrl(), config.getProviderId(), "Token URL");
 		HttpRequest tokenRequest = HttpRequest.newBuilder()
-				.uri(URI.create(config.getTokenUrl()))
+				.uri(tokenUri)
 				.timeout(Duration.ofSeconds(10))
 				.header("Content-Type", "application/x-www-form-urlencoded")
 				.header("Accept", "application/json")
@@ -621,12 +624,10 @@ public class UserAuthMethodServiceImpl implements UserAuthMethodService {
 
 	private OAuthProfile fetchUserProfile(AuthProviderConfigEntity config, String accessToken, HttpClient httpClient) throws IOException, InterruptedException {
 		String userInfoUrl = config.getUserInfoUrl();
-		if (userInfoUrl == null || userInfoUrl.isBlank()) {
-			throw new IllegalStateException("User info URL is not configured for provider: " + config.getProviderId());
-		}
+		URI userUri = validateOutboundEndpoint(userInfoUrl, config.getProviderId(), "User info URL");
 
 		HttpRequest userRequest = HttpRequest.newBuilder()
-				.uri(URI.create(userInfoUrl))
+				.uri(userUri)
 				.timeout(Duration.ofSeconds(10))
 				.header("Authorization", "Bearer " + accessToken)
 				.header("Accept", "application/json")
@@ -662,6 +663,49 @@ public class UserAuthMethodServiceImpl implements UserAuthMethodService {
 		String email = userNode.hasNonNull(FIELD_EMAIL) ? userNode.get(FIELD_EMAIL).asText() : null;
 
 		return new OAuthProfile(subject, username != null ? username : subject, email);
+	}
+
+	private URI validateOutboundEndpoint(String rawUrl, String providerId, String endpointName) {
+		if (rawUrl == null || rawUrl.isBlank()) {
+			throw new IllegalStateException(endpointName + " is not configured for provider: " + providerId);
+		}
+
+		URI uri;
+		try {
+			uri = URI.create(rawUrl.trim()).normalize();
+		} catch (Exception ex) {
+			throw new IllegalArgumentException("Invalid " + endpointName + " for provider " + providerId + ": " + ex.getMessage(), ex);
+		}
+
+		String scheme = uri.getScheme();
+		if (scheme == null || !"https".equalsIgnoreCase(scheme)) {
+			throw new SecurityException("SSRF Protection: Insecure scheme for " + endpointName + " in provider " + providerId + ": " + scheme);
+		}
+
+		String host = uri.getHost();
+		if (host == null || host.isBlank()) {
+			throw new SecurityException("SSRF Protection: Missing host in " + endpointName + " for provider " + providerId);
+		}
+
+		String lowerHost = host.toLowerCase(Locale.ROOT);
+		if ("localhost".equals(lowerHost) || lowerHost.endsWith(".localhost") || "metadata.google.internal".equals(lowerHost) || "instance-data".equals(lowerHost)) {
+			throw new SecurityException("SSRF Protection: Destination blocked for " + endpointName + ": " + host);
+		}
+
+		try {
+			InetAddress[] addresses = InetAddress.getAllByName(host);
+			for (InetAddress addr : addresses) {
+				if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress() || addr.isAnyLocalAddress()) {
+					throw new SecurityException("SSRF Protection: Outbound request to private/internal IP address rejected: " + addr.getHostAddress());
+				}
+			}
+		} catch (SecurityException se) {
+			throw se;
+		} catch (Exception e) {
+			log.warn("DNS resolution check for outbound host '{}': {}", host, e.getMessage());
+		}
+
+		return uri;
 	}
 
 	private String resolveUserRole(UsersEntityV2 user) {

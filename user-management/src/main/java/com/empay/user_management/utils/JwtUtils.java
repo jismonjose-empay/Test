@@ -41,7 +41,7 @@ public class JwtUtils {
 			var builder = Jwts.builder()
 					.setSubject(userId)
 					.claim(APIConstants.USER_ID, userId)
-					.setIssuedAt(new Date())
+					.setIssuedAt(Date.from(Instant.now()))
 					.setExpiration(expirationDate);
 			if (userSerialNumber != null) {
 				builder.claim(APIConstants.USER_SER_NUMBER, userSerialNumber);

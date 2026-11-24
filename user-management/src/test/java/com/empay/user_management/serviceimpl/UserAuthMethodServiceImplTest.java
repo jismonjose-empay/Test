@@ -824,4 +824,47 @@ class UserAuthMethodServiceImplTest {
         assertNotNull(body);
         assertTrue(body.get("message").toString().contains("No MARS account is linked"));
     }
+
+    @Test
+    @DisplayName("SSRF protection: validateOutboundEndpoint allows valid HTTPS endpoint")
+    void testValidateOutboundEndpoint_ValidHttps_Success() {
+        java.net.URI uri = ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                "https://accounts.google.com/o/oauth2/token", "GOOGLE", "Token URL");
+        assertNotNull(uri);
+        assertEquals("https", uri.getScheme());
+        assertEquals("accounts.google.com", uri.getHost());
+    }
+
+    @Test
+    @DisplayName("SSRF protection: validateOutboundEndpoint rejects insecure schemes")
+    void testValidateOutboundEndpoint_InsecureScheme_ThrowsSecurityException() {
+        assertThrows(SecurityException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        "http://accounts.google.com/token", "GOOGLE", "Token URL"));
+        assertThrows(SecurityException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        "ftp://accounts.google.com/token", "GOOGLE", "Token URL"));
+    }
+
+    @Test
+    @DisplayName("SSRF protection: validateOutboundEndpoint rejects localhost and metadata services")
+    void testValidateOutboundEndpoint_LocalhostAndMetadata_ThrowsSecurityException() {
+        assertThrows(SecurityException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        "https://localhost/token", "LOCAL", "Token URL"));
+        assertThrows(SecurityException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        "https://metadata.google.internal/token", "GCP", "Token URL"));
+    }
+
+    @Test
+    @DisplayName("SSRF protection: validateOutboundEndpoint rejects null or blank URL")
+    void testValidateOutboundEndpoint_BlankUrl_ThrowsIllegalStateException() {
+        assertThrows(IllegalStateException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        "", "GOOGLE", "Token URL"));
+        assertThrows(IllegalStateException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "validateOutboundEndpoint",
+                        null, "GOOGLE", "Token URL"));
+    }
 }

@@ -1,8 +1,10 @@
 package com.empay.user_management.serviceimpl;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Base64;
 import java.util.Locale;
 import org.springframework.security.core.Authentication;
 import java.time.format.DateTimeFormatter;
@@ -76,7 +78,14 @@ public class LoginServiceImpl implements LoginService {
 
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
 
-	private final String dummyPasswordHash = passwordEncoder.encode("timing-mitigation-dummy-salt-2026");
+	// Dynamically generate a random dummy hash at startup to prevent static analyzer false positives and eliminate hardcoded credentials
+	private final String dummyPasswordHash = generateDummyHash();
+
+	private static String generateDummyHash() {
+		byte[] randomBytes = new byte[32];
+		new SecureRandom().nextBytes(randomBytes);
+		return new BCryptPasswordEncoder(12).encode(Base64.getEncoder().encodeToString(randomBytes));
+	}
 
 	private static final int MAX_FAILED_ATTEMPTS = 5;
 	private static final long LOCKOUT_MINUTES = 15;
