@@ -1,24 +1,26 @@
 package com.empay.user_management.utils;
 
-import java.security.Key;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Objects;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import javax.crypto.SecretKey;
+
+import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Cookie;
+
+import static io.jsonwebtoken.Jwts.*;
 
 @Service
 public class JwtUtils {
@@ -31,7 +33,7 @@ public class JwtUtils {
 	@Value("${jwt.secret}")
 	private String secret;
 
-	private Key getSigningKey() {
+	private SecretKey getSigningKey() {
 		return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 	}
 
@@ -69,7 +71,7 @@ public class JwtUtils {
 			return false;
 		}
 		try {
-			Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+			extractClaims(token);
 			return true;
 		} catch (Exception e) {
 			logger.debug("Invalid JWT token: {}", e.getMessage());
@@ -82,8 +84,7 @@ public class JwtUtils {
 			return null;
 		}
 		try {
-			Jws<Claims> jwsClaims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
-			Claims claims = jwsClaims.getBody();
+			Claims claims = extractClaims(token);
 			String subject = claims.getSubject();
 			if (subject != null && !subject.isBlank()) {
 				return subject;
@@ -195,7 +196,11 @@ public class JwtUtils {
 	}
 
 	public Claims extractClaims(String token) {
-		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();
+		return parser()
+				.verifyWith(getSigningKey())   // was setSigningKey(...)
+				.build()
+				.parseSignedClaims(token)      // was parseClaimsJws(token)
+				.getPayload();                 // was getBody()
 	}
 	
 	public Integer getInstitutionCode(HttpServletRequest request) {

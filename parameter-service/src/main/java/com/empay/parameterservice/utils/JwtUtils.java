@@ -1,21 +1,23 @@
 
 package com.empay.parameterservice.utils;
 
-import java.security.Key;
 import java.time.Duration;
 import java.util.Objects;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.io.Decoders;
+import javax.crypto.SecretKey;
+
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.Cookie;
+
+import static io.jsonwebtoken.Jwts.*;
 
 @Slf4j
 @Service
@@ -29,10 +31,9 @@ public class JwtUtils {
 	@Value("${jwt.secret}")
 	private String secret;
 
-	private Key getSigningKey() {
+	private SecretKey getSigningKey() {
 		return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 	}
-
 	public String getAccessTokenFromRequest(HttpServletRequest request) {
 
 	    if (request == null) {
@@ -109,9 +110,17 @@ public class JwtUtils {
 
 	// Extract all claims from JWT
 
-	public Claims extractClaims(String token) {
+//	public Claims extractClaims(String token) {
+//
+//		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();
+//	}
 
-		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();
+	public Claims extractClaims(String token) {
+		return parser()
+				.verifyWith(getSigningKey())   // was setSigningKey(...)
+				.build()
+				.parseSignedClaims(token)      // was parseClaimsJws(token)
+				.getPayload();                 // was getBody()
 	}
 
 	// Extract USER_ID claim

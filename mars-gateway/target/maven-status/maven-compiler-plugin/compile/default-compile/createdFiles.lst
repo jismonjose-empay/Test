@@ -1,8 +1,0 @@
-com\empay\mars_gateway\config\WebClientConfig.class
-com\empay\mars_gateway\MarsGatewayApplication.class
-com\empay\mars_gateway\utils\UserManagementPermissionUtils.class
-com\empay\mars_gateway\utils\UserActivityTrackingFilter.class
-com\empay\mars_gateway\valueobjects\UserActivityTrackingVO.class
-com\empay\mars_gateway\utils\ParameterPermissionUtils.class
-com\empay\mars_gateway\config\GatewayRouteConfig.class
-com\empay\mars_gateway\utils\APIConstants.class

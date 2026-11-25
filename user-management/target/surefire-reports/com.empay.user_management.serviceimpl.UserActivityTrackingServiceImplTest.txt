@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.empay.user_management.serviceimpl.UserActivityTrackingServiceImplTest
--------------------------------------------------------------------------------
-Tests run: 24, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.254 s -- in com.empay.user_management.serviceimpl.UserActivityTrackingServiceImplTest
